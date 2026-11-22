@@ -15,6 +15,8 @@ export const FEATURES = {
     bundles: { label: "Bundle posts", fix: "Use `/codes bundles` to pick another channel, or fix the permissions on the current one." },
     feed: { label: "Free game posts", fix: "Pick another alert channel on the dashboard's Server page (or with `/setup`), or fix the permissions on the current one." },
     deals: { label: "Hot deal posts", fix: "Pick another alert channel on the dashboard's Server page (or with `/setup`), or fix the permissions on the current one." },
+    drops: { label: "Promo drop posts", fix: "Use `/server promos` to pick another channel, or fix the permissions on the current one." },
+    news: { label: "Promo news posts", fix: "Use `/server promos` to pick another channel, or fix the permissions on the current one." },
     sale: { label: "Steam sale posts", fix: "Pick another alert channel on the dashboard's Server page (or with `/setup`), or fix the permissions on the current one." }
 };
 

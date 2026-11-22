@@ -1242,3 +1242,12 @@ test("dashboard community page lists what the bot couldn't do, to managers only,
     assert.deepEqual((await t.request("/api/community?guild=g1")).data.problems.map(p => p.key), ["autorole"]);
     await t.close();
 });
+
+test("dashboard community page: a manager can run the channel check, and nobody else can", async () => {
+    const t = await dashSetup();
+    t.db.setCodeSettings("g1", { channel_id: "c1" });
+    const r = await t.request("/api/community/channelcheck?guild=g1");
+    assert.equal(r.status, 503, "no inspector in this test setup");
+    assert.equal((await t.request("/api/community/channelcheck?guild=g2")).status, 403);
+    await t.close();
+});

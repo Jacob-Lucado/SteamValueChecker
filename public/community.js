@@ -48,7 +48,19 @@
           h("p", { class: "muted small", text: "The bot tried to do these and Discord wouldn't let it. Fix the cause, then dismiss the note." }),
           h("ul", { class: "plain" }, d.problems.map(p => { const x = h("button", { class: "btn gray small", type: "button", text: "Dismiss" }); x.addEventListener("click", () => busy(x, async () => { await post("/api/community/problems/clear", { key: p.key }); load(); }));
             return h("li", {}, h("div", {}, h("b", { text: "Couldn't " + p.what }), h("span", { class: "muted small", text: `  ·  ${p.count} time${p.count === 1 ? "" : "s"}, last ${new Date(p.at).toLocaleString()}` })), h("div", { class: "muted small", text: p.why }), x); }))) : null;
-        holder.replaceChildren(...[picker, problems, intent, standing, verifyPanel, boards, rewards, d.manager && d.growth ? growthPanel(d.growth) : null, d.manager ? manager(d) : null].filter(Boolean));
+        const chkOut = h("div", { class: "stack" });
+        const chkBtn = h("button", { class: "btn blue", type: "button", text: "Check my post channels" });
+        chkBtn.addEventListener("click", () => busy(chkBtn, async () => {
+          try {
+            const r = await api("/api/community/channelcheck?guild=" + encodeURIComponent(GID()));
+            chkOut.replaceChildren(...(r.rows.length ? r.rows.map(x => h("div", { class: "notice " + (x.ok ? "ok" : "warn") },
+              h("b", { text: (x.ok ? "✅ " : "❌ ") + x.label }), h("span", { class: "muted small", text: "  ·  #" + (x.name || x.channelId) }),
+              x.ok ? h("div", { class: "muted small", text: "The bot can post here." }) : h("div", {}, h("div", { class: "small", text: x.problem }), h("div", { class: "muted small", text: x.fix })))) : [h("p", { class: "muted", text: "No post channels are set up yet." })]));
+          } catch (e) { toast(e.message, "warn"); }
+        }));
+        const checkPanel = d.manager ? h("div", { class: "panel" }, h("h3", { text: "Can the bot post?" }),
+          h("p", { class: "muted", text: "Tests each channel you picked for alerts, codes, bundles and promos: the bot must see it, send messages and embed links. Fix a problem here before a post fails." }), chkBtn, chkOut) : null;
+        holder.replaceChildren(...[picker, problems, checkPanel, intent, standing, verifyPanel, boards, rewards, d.manager && d.growth ? growthPanel(d.growth) : null, d.manager ? manager(d) : null].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     // Joins and leaves for the last 30 days, people only. Only members the bot saw join are counted, so it fills in from when the bot arrived.

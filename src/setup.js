@@ -1,5 +1,6 @@
 // Guided server setup: the same checklist in Discord (/manage setup, channel pickers) and on the dashboard (Setup page).
 // No discord.js import here: the dashboard shares setupStatus, and it runs without discord.js.
+import { checkChannels, checkEmbed } from "./channelcheck.js";
 import { removeStartChannel } from "./startchannel.js";
 const EPHEMERAL = 64;
 const PermissionFlagsBits = { ManageGuild: 1n << 5n, ViewChannel: 1n << 10n, SendMessages: 1n << 11n, EmbedLinks: 1n << 14n };
@@ -101,13 +102,17 @@ export async function autoSetup({ api, db, guildId, botId, userId, staffRoleId =
     return { created, note: `Created ${created.map(c => `<#${c.id}>`).join(", ") || "nothing new"}.${need.support ? " #support-tickets is private to you and the bot; add your staff to it." : ""}${forumNote}` };
 }
 
-export function createSetupHandlers({ db, publicUrl = null }) {
+export function createSetupHandlers({ db, publicUrl = null, inspectFor = null }) {
     const eph = (i, content) => i.reply({ content, flags: EPHEMERAL });
     const allowed = i => i.inGuild() && i.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
     const panel = i => { const st = setupStatus(db, i.guildId); return { embeds: [setupEmbed(st, publicUrl, i.guildId)], components: setupComponents(st) }; };
 
     async function handleCommand(i) {
         if (!allowed(i)) return eph(i, "Run this in your server with the Manage Server permission.");
+        if (i.options?.getBoolean?.("check") && inspectFor) {
+            await i.deferReply({ flags: EPHEMERAL });
+            return i.editReply({ embeds: [checkEmbed(await checkChannels({ db, guildId: i.guildId, inspect: inspectFor(i.guildId) }))] });
+        }
         return i.reply({ ...panel(i), flags: EPHEMERAL });
     }
 

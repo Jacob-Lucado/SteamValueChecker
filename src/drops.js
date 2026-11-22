@@ -108,7 +108,7 @@ const mention = (s, role) => { const r = s.role_id ?? role ?? null; return { con
  * One pass: read the blogs, end what has run out, post what each server has not had, edit old posts.
  * `getNews` is injectable for tests.
  */
-export async function runDrops({ db, api, notifier = null, getNews = fetchNews, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
+export async function runDrops({ db, api, notifier = null, getNews = fetchNews, now = Date.now, sleep = sleepDefault, pace = 500, health = null, log = () => {} }) {
     const stats = { news: 0, posted: 0, ended: 0, failed: 0, feedError: null };
     if (db.dropGuilds().some(s => s.news) || db.alertSubscribers("promos").length) {
         try {
@@ -123,16 +123,22 @@ export async function runDrops({ db, api, notifier = null, getNews = fetchNews, 
         catch (err) { log(`promo alerts: ${err.message}`); }
     }
 
+    const fail = async (feature, s, err) => {
+        stats.failed++;
+        if (health) await health.report({ feature, guildId: s.guild_id, channelId: s.channel_id, err });
+        else log(`${feature === "drops" ? "drop" : "news"} post failed in server ${s.guild_id}, channel ${s.channel_id} (${err?.status ?? err?.name}${err?.detail ? ` ${err.detail}` : ""})`);
+    };
     for (const s of db.dropGuilds()) {
-        for (const d of db.unpostedDrops(s.guild_id)) {
+        for (const d of health?.blocked("drops", s.guild_id) ? [] : db.unpostedDrops(s.guild_id)) {
             try {
                 const msg = await api.sendMessage(s.channel_id, { ...dropEmbed(d), ...mention(s, db.getCommunity?.(s.guild_id)?.ping_promos) });
                 db.addDropPost(d.id, s.channel_id, msg?.id ?? null);
                 stats.posted++;
-            } catch (err) { stats.failed++; log(`drop post failed (${err?.status ?? err?.name})`); break; }
+                health?.ok("drops", s.guild_id);
+            } catch (err) { await fail("drops", s, err); break; }
             await sleep(pace);
         }
-        if (!s.news) continue;
+        if (!s.news || health?.blocked("news", s.guild_id)) continue;
         const fresh = db.unpostedNews(s.guild_id);
         if (!fresh.length) continue;
         if (!db.hasAnyNewsPost(s.guild_id)) { for (const n of fresh) db.addNewsPost(n.id, s.guild_id, s.channel_id, null); continue; } // first time on: only future posts
@@ -141,7 +147,8 @@ export async function runDrops({ db, api, notifier = null, getNews = fetchNews, 
                 const msg = await api.sendMessage(s.channel_id, joinMention(newsEmbed(n), mention(s, db.getCommunity?.(s.guild_id)?.ping_promos)));
                 db.addNewsPost(n.id, s.guild_id, s.channel_id, msg?.id ?? null);
                 stats.posted++;
-            } catch (err) { stats.failed++; log(`news post failed (${err?.status ?? err?.name})`); break; }
+                health?.ok("news", s.guild_id);
+            } catch (err) { await fail("news", s, err); break; }
             await sleep(pace);
         }
         for (const n of fresh.slice(MAX_NEWS_PER_RUN)) db.addNewsPost(n.id, s.guild_id, s.channel_id, null); // a backlog is not worth a flood

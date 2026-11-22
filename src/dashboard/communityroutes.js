@@ -2,10 +2,11 @@
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
 import { HttpError } from "./http.js";
 import { UserError } from "../errors.js";
+import { checkChannels } from "../channelcheck.js";
 import { renderWelcomeCard } from "../cardimg.js";
 
 export function createCommunityRoutes(ctx) {
-    const { botGuilds, botIn, cd, comm, cooldown, guildFor, guildList, isManager, managerGuild, playtests, session } = ctx;
+    const { channelCheck, db, botGuilds, botIn, cd, comm, cooldown, guildFor, guildList, isManager, managerGuild, playtests, session } = ctx;
     return {
         // ---- community: welcome, XP and levels, invites and referrals, emoji, one-click server build ----
         "GET /api/community": async (req, _b, url) => {
@@ -80,6 +81,12 @@ export function createCommunityRoutes(ctx) {
         },
         "POST /api/community/pings": async (req, body) => comm(() => cd.pings(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/guides": async (req, body) => { const s = session(req); return comm(() => cd.guides(managerGuild(s, String(body.guild_id)).id, body, s.userId ?? s.id ?? null)); },
+        // Tests the bot's permissions in every post channel this server picked (the same check as /setup check).
+        "GET /api/community/channelcheck": async (req, _b, url) => {
+            const g = managerGuild(session(req), url.searchParams.get("guild"));
+            if (!channelCheck) throw new HttpError(503, "The channel check isn't available on this bot.");
+            return comm(() => checkChannels({ db, guildId: g.id, inspect: channelCheck(g.id) }));
+        },
         "POST /api/community/problems/clear": async (req, body) => comm(() => cd.dismissProblem(managerGuild(session(req), String(body.guild_id)).id, body.key)),
         "POST /api/community/autorole": async (req, body) => comm(() => cd.autorole(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/xp": async (req, body) => comm(() => cd.xp(managerGuild(session(req), String(body.guild_id)).id, body)),

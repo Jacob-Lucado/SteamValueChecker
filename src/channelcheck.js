@@ -1,0 +1,61 @@
+// Channel check: before a post fails, test each channel a server has chosen for the bot's posts. The bot needs to see the channel,
+// send messages and embed links there. Each row says what is wrong in plain words and how to fix it, so a server's manager can
+// fix a hidden channel or a category override without waiting for a failed post and an owner DM.
+import { FEATURES } from "./feedhealth.js";
+
+const NEED = ["View Channel", "Send Messages", "Embed Links"];
+
+/** The channels a server has set up, as [{ feature, label, channelId }] (one row per feature, nothing for features left off). */
+export function configuredChannels(db, guildId) {
+    const out = [];
+    const add = (feature, channelId) => { if (channelId) out.push({ feature, label: FEATURES[feature]?.label ?? feature, channelId: String(channelId) }); };
+    add("feed", db.getGuild?.(guildId)?.channel_id);
+    add("codes", db.getCodeSettings?.(guildId)?.channel_id);
+    add("bundles", db.getBundleFeedSettings?.(guildId)?.channel_id);
+    add("drops", db.getDropSettings?.(guildId)?.channel_id);
+    return out;
+}
+
+/**
+ * `inspect(channelId)` is async and returns { exists, name, missing } where `missing` lists the permissions the bot lacks
+ * (names from NEED). Returns { rows, bad } with one row per configured channel: { ...channel, name, ok, problem, fix }.
+ */
+export async function checkChannels({ db, guildId, inspect }) {
+    const rows = [];
+    for (const c of configuredChannels(db, guildId)) {
+        let r;
+        try { r = await inspect(c.channelId); } catch { r = null; }
+        let problem = null;
+        if (!r) problem = "I couldn't look at that channel right now.";
+        else if (!r.exists) problem = "That channel was deleted or I can't see it. A channel or category permission may be hiding it from me.";
+        else if (r.missing?.length) problem = `I'm missing: ${r.missing.join(", ")}.`;
+        rows.push({ ...c, name: r?.name ?? null, ok: !problem, problem, fix: problem ? FEATURES[c.feature]?.fix ?? "Fix the channel's permissions." : null });
+    }
+    return { rows, bad: rows.filter(r => !r.ok).length };
+}
+
+export function checkEmbed(res) {
+    if (!res.rows.length) return { color: 0x5865f2, title: "Channel check", description: "No post channels are set up yet. Run `/setup` to pick them." };
+    const lines = res.rows.map(r => r.ok
+        ? `✅ **${r.label}**: <#${r.channelId}> is fine.`
+        : `❌ **${r.label}**: <#${r.channelId}>. ${r.problem}\n   ${r.fix}`);
+    return {
+        color: res.bad ? 0xed4245 : 0x57f287, title: res.bad ? `Channel check: ${res.bad} problem${res.bad === 1 ? "" : "s"}` : "Channel check: all good",
+        description: lines.join("\n").slice(0, 3800),
+        footer: { text: `The bot needs ${NEED.join(", ")} in each channel. Check the category's permissions too.` }
+    };
+}
+
+/** Builds `inspect` from a discord.js client. */
+export function clientInspector(client, guildId, PermissionFlagsBits) {
+    const flags = [[PermissionFlagsBits.ViewChannel, NEED[0]], [PermissionFlagsBits.SendMessages, NEED[1]], [PermissionFlagsBits.EmbedLinks, NEED[2]]];
+    return async channelId => {
+        const g = client.guilds.cache.get(String(guildId));
+        if (!g) return null;
+        const ch = g.channels.cache.get(channelId) ?? await g.channels.fetch(channelId).catch(() => null);
+        if (!ch) return { exists: false, name: null, missing: [] };
+        const me = g.members.me ?? await g.members.fetchMe().catch(() => null);
+        const p = me ? ch.permissionsFor(me) : null;
+        return { exists: true, name: ch.name, missing: p ? flags.filter(([f]) => !p.has(f)).map(([, n]) => n) : NEED };
+    };
+}

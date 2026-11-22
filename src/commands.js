@@ -543,6 +543,7 @@ const gamenight = new SlashCommandBuilder().setName("gamenight")
     .addBooleanOption(o => o.setName("post").setDescription("Show it in this channel (default: only you)"));
 
 const setup = new SlashCommandBuilder().setName("setup").setDescription("Server managers: guided setup for alerts, support tickets and giveaways")
+    .addBooleanOption(o => o.setName("check").setDescription("Test that the bot can post in each channel you picked"))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
 const textChan = [ChannelType.GuildText, ChannelType.GuildAnnouncement];

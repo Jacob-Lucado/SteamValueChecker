@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.83", date: "2026-11-21", title: "Failing posts are explained and the owner is told", items: [
+        "When a game code, bundle, free game, deal, sale or promo post can't be sent, the log now names the server and channel, Discord's exact answer and the plain reason (hidden channel, missing Embed Links, deleted channel).",
+        "**Channel check:** `/setup check:True`, or *Check my post channels* on the Community page, tests every channel a server picked for alerts, codes, bundles and promos and says what's missing (View Channel, Send Messages, Embed Links) before a post fails.",
+        "A broken channel is skipped for a day instead of failing every cycle, and after the second failure the server's owner gets a DM explaining the fix (at most one a week). The server's Community page lists the problem, and the Admin page shows every failing server with a *Retry now* button.",
+    ] },
     { version: "2026.11.82", date: "2026-11-20", title: "Higher or lower, and library duels", items: [
         "**Higher or lower:** `/server trivia hilo` shows one game's launch price, Steam review count or Metacritic score, and you guess if the next game's is higher or lower. Every right guess keeps the streak going. Anyone can play, the server's longest streaks show on `/server trivia top`, and the Trivia page has the same game.",
         "**Library duels:** comparing two libraries now keeps score on games owned, hours played and games finished, with a winner. It's on `/server compare` and the Compare page.",

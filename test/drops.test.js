@@ -112,6 +112,20 @@ test("promos: a failed post is tried again, and a server with no channel gets no
     assert.equal(sent.length, 1);
 });
 
+test("promos: a blocked channel is reported once with its reason, then left alone until the back-off ends", async () => {
+    const { createFeedHealth } = await import("../src/feedhealth.js");
+    const db = openDb(":memory:");
+    let calls = 0; const lines = [];
+    const api = { sendMessage: async () => { calls++; throw Object.assign(new Error("x"), { status: 403, detail: "Missing Access (code 50001)" }); }, editMessage: async () => ({}) };
+    const health = createFeedHealth({ db, log: m => lines.push(m), now: () => NOW });
+    db.setDropSettings("g1", { channel_id: "c1" });
+    db.addDrop({ guildId: "g1", title: "K", code: "ABCD" });
+    const run = () => runDrops({ db, api, health, now: () => NOW, sleep: async () => {}, getNews: async () => ({ items: [], errors: [] }) });
+    await run(); await run();
+    assert.equal(calls, 1, "the second pass skips the blocked server");
+    assert.match(lines[0], /Promo drop posts failed in server g1, channel c1: 403 50001 Missing Access/);
+});
+
 test("promos: blog posts are only sent to servers that opted in, only new ones, and only once", async () => {
     const db = openDb(":memory:");
     const { api, sent } = fakeApi();
