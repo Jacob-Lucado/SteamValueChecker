@@ -85,6 +85,8 @@ def furnidata(text: str) -> dict[str, dict]:
     except json.JSONDecodeError:
         # Packs split floor and wall items with "## ... ##" or "<< ... >>" notes; the entries themselves are what matter.
         body = re.sub(r"(?m)^\s*(##.*##|<<.*>>)\s*$", "", text).strip().rstrip(",")
+        body = re.sub(r'(?m)^\s*"furnitype"\s*:\s*\[\s*\{?\s*$', "", body)
+        body = re.sub(r",\s*\{\s*$", "", body)
         body = body if body.startswith("{") else "{" + body
         entries = json.loads("[" + body + ("" if body.endswith("}") else "}") + "]")
     return {entry["classname"]: entry for entry in entries if "classname" in entry}
@@ -181,13 +183,14 @@ def main() -> None:
     id_base = parent_id - PAGE_BASE + 1100000000
     missing, written = [], 0
     for position, (name, item) in enumerate(chosen.items(), 1):
-        bundle, entry = bundles.get(name), data.get(name)
+        bundle, entry = bundles.get(name.split("*")[0]), data.get(name)
         if bundle is None or entry is None:
             missing.append(name)
             continue
         shutil.copy(bundle, out / "bundles" / bundle.name)
-        if name in icons:
-            shutil.copy(icons[name], out / "icons" / icons[name].name)
+        icon = icons.get(name.replace("*", "_"))
+        if icon:
+            shutil.copy(icon, out / "icons" / icon.name)
 
         furni_id = id_base + position
         interaction = item.get("interaction_type", "default").lower()
