@@ -30,7 +30,7 @@
       list.replaceChildren(...rows.map(r => {
         const box = h("input", { type: "checkbox", checked: st.picked.has(r.itad_id) });
         box.addEventListener("change", () => { if (box.checked) st.picked.add(r.itad_id); else st.picked.delete(r.itad_id); draw(); });
-        return h("label", { class: "war-row" }, box, h("b", { text: " " + r.title }), h("span", { class: "muted", text: "  " + money(r.price, st.cur) + (r.discount > 0 ? " (-" + Math.round(r.discount * 100) + "%)" : "") + " at " + r.shop + (r.verdict ? " · " + r.verdict : "") }));
+        return h("label", { class: "war-row" }, box, " ", h("a", { class: "game-link", href: "#/g/" + encodeURIComponent(r.itad_id), target: "_blank", rel: "noopener", onclick: ev => ev.stopPropagation(), text: r.title }), h("span", { class: "muted", text: "  " + money(r.price, st.cur) + (r.discount > 0 ? " (-" + Math.round(r.discount * 100) + "%)" : "") + " at " + r.shop + (r.verdict ? " · " + r.verdict : "") }));
       }));
     }
     slider.addEventListener("input", () => { st.budget = Number(slider.value); autofill(); draw(); });
@@ -68,7 +68,7 @@
     const recapBtn = h("button", { class: "btn gray", text: "Show sale recap", onclick: () => busy(recapBtn, async () => {
       const r = await api("/api/saleprep/recap");
       recapOut.replaceChildren(r.alerts ? h("div", { class: "panel" }, h("h3", { text: "Last " + r.days + " days" }), h("p", { text: "Your alerts caught " + r.games + " games, " + r.spend.toFixed(2) + " at the alert prices" + (r.saved > 0 ? ", " + r.saved.toFixed(2) + " under regular." : ".") }),
-        h("ul", { class: "plain" }, r.top.map(a => h("li", {}, h("b", { text: a.title }), " ", h("span", { class: "muted", text: a.price.toFixed(2) + (a.regular ? " (was " + a.regular.toFixed(2) + ")" : "") + (a.shop ? " at " + a.shop : "") }))))) : h("div", { class: "empty", text: "No sale alerts in the last " + r.days + " days." }));
+        h("ul", { class: "plain" }, r.top.map(a => h("li", {}, a.itad_id ? h("a", { class: "game-link", href: "#/g/" + encodeURIComponent(a.itad_id), target: "_blank", rel: "noopener", text: a.title }) : h("b", { text: a.title }), " ", h("span", { class: "muted", text: a.price.toFixed(2) + (a.regular ? " (was " + a.regular.toFixed(2) + ")" : "") + (a.shop ? " at " + a.shop : "") }))))) : h("div", { class: "empty", text: "No sale alerts in the last " + r.days + " days." }));
     }) });
     app.replaceChildren(pageHead("Sale planner", "Plan your cart for a Steam sale: set a budget and the best savings fill it first. Untick anything you do not want. After a sale, see what your alerts caught."), out, h("h2", { text: "After the sale" }), recapBtn, recapOut);
     load();

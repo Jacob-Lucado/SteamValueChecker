@@ -143,3 +143,11 @@ test("suggested prices for the list: starred first, owned and price-rule games s
     assert.deepEqual(asked.sort(), ["a", "b"], "owned and already-priced games are not looked up");
     assert.equal(r.considered, 2);
 });
+
+test("overview keeps each game's id so the dashboard can link the titles", async () => {
+    const { overview } = await import("../src/whynot.js");
+    const o = overview([{ id: "a", title: "Alpha", res: { verdict: "would" } }, { id: "b", title: "Beta", res: { verdict: "blocked", code: "paused" } }]);
+    assert.deepEqual(o.wouldGames, [{ id: "a", title: "Alpha" }]);
+    assert.deepEqual(o.blocked[0].games, [{ id: "b", title: "Beta" }]);
+    assert.deepEqual(o.would, ["Alpha"]);
+});

@@ -23,14 +23,14 @@
       const maxSel = select([["any", "Any"], ["5", "Under 5"], ["10", "Under 10"], ["20", "Under 20"], ["40", "Under 40"]], st.max);
       maxSel.addEventListener("change", () => { st.max = maxSel.value; st.page = 0; draw(); });
       const set = (k, v) => () => { st[k] = v; st.page = 0; draw(); };
-      const card = d => h("a", { class: "fy-card", href: d.url && /^https:\/\//.test(d.url) ? d.url : "#/foryou", target: "_blank", rel: "noopener noreferrer" },
+      const card = d => h("div", { class: "fy-card" },
         h("div", { class: "fy-match" + (d.match === null ? " none" : ""), "aria-label": d.match === null ? "No match score yet" : d.match + " percent match" }, h("b", { text: d.match === null ? "–" : String(d.match) }), h("small", { text: "MATCH" })),
         steamArt(d.appid, "fy-art", 460, 215, d.id),
         h("div", { class: "fy-info" },
-          h("strong", { class: "fy-title", text: d.title }),
+          h("a", { class: "fy-title game-link", href: "#/g/" + encodeURIComponent(d.id), text: d.title }),
           h("span", { class: "muted small", text: d.shop + (d.atl ? " · all-time low" : "") + (d.wishlist ? " · on your wishlist" : "") }),
           d.genres.length ? h("span", { class: "fy-genres", text: d.genres.join(" · ") }) : null),
-        h("div", { class: "fy-price" }, h("span", { class: "fy-cut", text: "-" + d.cut + "%" }), h("b", { text: money(d.price, cur) }), h("s", { text: money(d.regular, cur) })));
+        h("a", { class: "fy-price fy-store", href: d.url && /^https:\/\//.test(d.url) ? d.url : "#/foryou", target: "_blank", rel: "noopener noreferrer", "aria-label": "Open " + d.title + " in the store" }, h("span", { class: "fy-cut", text: "-" + d.cut + "%" }), h("b", { text: money(d.price, cur) }), h("s", { text: money(d.regular, cur) })));
       const prev = h("button", { class: "pg-btn wide", text: "‹ Prev", onclick: () => { st.page--; draw(); host.scrollIntoView({ block: "start" }); } }); prev.disabled = st.page === 0;
       const next = h("button", { class: "pg-btn wide", text: "Next ›", onclick: () => { st.page++; draw(); host.scrollIntoView({ block: "start" }); } }); next.disabled = st.page >= pages - 1;
       host.className = "";

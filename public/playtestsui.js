@@ -33,7 +33,7 @@
         x.image ? h("img", { src: x.image, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : null,
         h("div", { class: "free-info" },
           h("div", { class: "pt-tags" }, tag, fresh.has(x.id) ? h("span", { class: "chip", text: "New" }) : null, x.wishlist ? h("span", { class: "chip ok", text: "On your wishlist" }) : null, x.owned ? h("span", { class: "chip dim", text: "You own it" }) : null),
-          h("strong", { text: x.game }),
+          h("strong", {}, x.url && /^https:\/\//.test(x.url) ? ext(x.url, x.game, "game-link") : x.game),
           h("span", { class: "muted small", text: x.title !== x.game ? x.title : "" }),
           x.summary ? h("span", { class: "muted small pt-sum", text: x.summary }) : null,
           x.tags && x.tags.length ? h("span", { class: "muted small", text: x.tags.slice(0, 5).join(" · ") }) : null,

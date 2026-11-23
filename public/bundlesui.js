@@ -18,7 +18,7 @@
       list.className = "";
       list.replaceChildren(d.bundles.length ? h("div", { class: "free-grid" }, d.bundles.map(b => h("div", { class: "free-card" + (b.status === "expired" ? " ended" : "") },
         b.image ? (() => { const img = h("img", { src: "/art/bundle/" + b.id + ".jpg", alt: "", loading: "lazy" }); let direct = false; img.addEventListener("error", () => { if (!direct) { direct = true; img.src = b.image; } else img.replaceWith(h("div", { class: "free-noart", text: b.storeName })); }); return img; })() : h("div", { class: "free-noart", text: b.storeName }),
-        h("div", { class: "free-info" }, h("strong", { text: b.title }), h("div", { class: "muted small", text: b.storeName + (b.gameCount ? ` · ${b.gameCount} games` : "") }),
+        h("div", { class: "free-info" }, h("strong", {}, b.url && /^https:\/\//.test(b.url) ? h("a", { class: "game-link", href: b.url, target: "_blank", rel: "noopener noreferrer", text: b.title }) : b.title), h("div", { class: "muted small", text: b.storeName + (b.gameCount ? ` · ${b.gameCount} games` : "") }),
           b.price ? h("div", { text: b.price }) : null,
           b.games.length ? h("details", {}, h("summary", { class: "muted small", text: "See the games" }), h("ul", { class: "muted small" }, ...b.games.slice(0, 12).map(g => h("li", { text: g })), b.games.length > 12 ? h("li", { text: `and ${b.games.length - 12} more` }) : null)) : null,
           h("span", { class: "muted small", text: b.expiresAt ? when(b.expiresAt) : "no end date listed" }),

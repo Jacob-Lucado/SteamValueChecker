@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.102", date: "2026-11-23", title: "Game titles link to the game", items: [
+        "Titles in Suggested alert prices, the Wallet planner, the *Why no alert?* lists, the Sale planner and its after-sale recap now open that game's page (price history and details).",
+        "On For you, each card's title opens the game's page while the rest of the card still opens the store.",
+        "Free games, Playtests, Bundles and the bundle check link their titles to the store page, and the price-by-region heading links to the game.",
+    ] },
     { version: "2026.11.101", date: "2026-11-22", title: "Alert distances in your language", items: [
         "The line on each wishlist card that says how far a game is from your alert rule (\"$4.00 above your price\", \"10% more off needed\", \"meets your rule\") is now translated too.",
     ] },

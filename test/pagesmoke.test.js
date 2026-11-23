@@ -137,7 +137,6 @@ test("the moderation page shows the auto-moderator and saves a change", { timeou
         await page.waitForTimeout(1500);
         const toastText = await page.evaluate(() => [...document.querySelectorAll("[class*=toast],[role=status],[role=alert]")].map(e => e.innerText).join("|"));
         await page.waitForTimeout(1200);
-        if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
         const saved = await o.request("/api/mod/automod?guild=g-admin");
         assert.equal(saved.status, 200, toastText);
         assert.equal(saved.data.settings.on, true); assert.equal(saved.data.settings.rules.spam.on, true);
@@ -644,6 +643,7 @@ test("the Wishlist page suggests prices for several games and applies the ticked
         await page.getByRole("button", { name: /Suggest prices/ }).evaluate(el => el.click());
         await page.getByRole("button", { name: "Suggest prices", exact: true }).evaluate(el => el.click());
         await page.getByText(/Alpha Duo: \$24\.00/).waitFor({ timeout: 10_000 });
+        assert.match(await page.getByRole("link", { name: "Alpha Duo" }).first().getAttribute("href"), /\/g\/a$/, "the suggestion links to the game's page");
         await page.getByLabel("Alert me for Beta Trio").evaluate(el => el.click());
         await page.getByRole("button", { name: "Apply the ticked ones" }).evaluate(el => el.click());
         await page.getByText(/Saved a price alert for 1 game\./).waitFor({ timeout: 10_000 });
@@ -770,4 +770,27 @@ test("no dashboard GET endpoint answers with a server error", { timeout: 240_000
         for (const p of paths) { const r = await o.request(p); if (r.status >= 500 && r.status !== 503) broken.push(`${p} -> ${r.status} ${JSON.stringify(r.data)?.slice(0, 120)}`); }
         assert.deepEqual(broken, []);
     } finally { await o.close(); }
+});
+
+test("For you cards link the title to the game page and the card to the store", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const getDealsPool = async () => [{ id: "zz1", title: "Gamma Deluxe", appid: 4242, cut: 50, price: 10, regular: 20, currency: "USD", url: "https://store.example/gamma" }];
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true }, itadExtra: { getDealsPool } });
+    try {
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/foryou`, { waitUntil: "load" });
+        const title = page.getByRole("link", { name: "Gamma Deluxe", exact: true });
+        await title.waitFor({ timeout: 20_000 });
+        assert.match(await title.getAttribute("href"), /\/g\/zz1$/);
+        assert.match(await page.getByRole("link", { name: /Open Gamma Deluxe in the store/ }).getAttribute("href"), /^https:\/\//);
+        assert.deepEqual(errors, []);
+        await ctx.close();
+    } finally { await browser.close(); await o.close(); }
 });

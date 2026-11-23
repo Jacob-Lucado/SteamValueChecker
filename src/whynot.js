@@ -77,11 +77,12 @@ const GROUPS = {
 
 /** The whole wishlist at once: which games would alert on the next run, and how many are held back by each rule. `results` is [{ title, res }]. */
 export function overview(results) {
+    const game = r => ({ id: r.id ?? null, title: r.title });
     const would = results.filter(r => r.res.verdict === "would").map(r => r.title);
     const groups = new Map();
-    for (const r of results) if (r.res.verdict === "blocked") (groups.get(r.res.code) ?? groups.set(r.res.code, []).get(r.res.code)).push(r.title);
-    const blocked = [...groups].map(([code, titles]) => ({ code, label: GROUPS[code] ?? code, titles })).sort((a, b) => b.titles.length - a.titles.length);
-    return { total: results.length, would, blocked };
+    for (const r of results) if (r.res.verdict === "blocked") (groups.get(r.res.code) ?? groups.set(r.res.code, []).get(r.res.code)).push(r);
+    const blocked = [...groups].map(([code, rs]) => ({ code, label: GROUPS[code] ?? code, titles: rs.map(r => r.title), games: rs.map(game) })).sort((a, b) => b.titles.length - a.titles.length);
+    return { total: results.length, would, wouldGames: results.filter(r => r.res.verdict === "would").map(game), blocked };
 }
 
 export function overviewEmbed(o) {
@@ -105,7 +106,7 @@ export async function whyEverything({ db, itad, user, now = Date.now(), money, p
     const owned = new Set(db.listLibrary(user.discord_id).map(g => g.itad_id)), guild = db.getGuild(user.guild_id);
     return overview(items.map(item => {
         const summary = summarize(prices.get(item.itad_id), { majorOnly: user.stores === "major" });
-        return { title: item.title, res: whyNoAlert({ user, item, summary, owned: owned.has(item.itad_id), guild, now, money: money ?? (n => n.toFixed(2)) }) };
+        return { id: item.itad_id, title: item.title, res: whyNoAlert({ user, item, summary, owned: owned.has(item.itad_id), guild, now, money: money ?? (n => n.toFixed(2)) }) };
     }));
 }
 

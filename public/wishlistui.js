@@ -68,7 +68,7 @@
       walletOut.className = "";
       walletOut.replaceChildren(
         h("div", { class: "grid three" }, ...[["Spend", money(d.spent, d.currency)], ["Left over", money(d.left, d.currency)], ["Saved vs full price", money(d.saved, d.currency)]].map(([k, v]) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "big", text: v })))),
-        h("div", { class: "stack" }, ...d.picks.map(p => h("div", { class: "row" }, h("div", {}, h("strong", { text: p.title }), h("div", { class: "muted small", text: p.why })), h("div", { text: money(p.price, d.currency) + (p.discount > 0 ? ` (-${Math.round(p.discount * 100)}%)` : "") })))));
+        h("div", { class: "stack" }, ...d.picks.map(p => h("div", { class: "row" }, h("div", {}, h("strong", {}, gameLink(p.itad_id, p.title)), h("div", { class: "muted small", text: p.why })), h("div", { text: money(p.price, d.currency) + (p.discount > 0 ? ` (-${Math.round(p.discount * 100)}%)` : "") })))));
     }) });
     const walletDrawer = drawer("Wallet planner", h("div", { class: "row" }, walletBudget, h("label", { class: "check" }, walletStar, "Only starred games"), walletGo), walletOut);
     // "Why no alert?": runs the hourly alert rules by hand for one game and says what is in the way.
@@ -87,14 +87,17 @@
       whyOut.className = "";
       whyOut.replaceChildren(
         h("div", { class: "notice " + (d.would.length ? "ok" : "warn"), role: "status" }, h("strong", { text: d.total ? `${d.would.length} of ${d.total} would alert on the next run` : "Your list is empty." })),
-        d.would.length ? h("p", { text: "✅ " + d.would.join(", ") }) : null,
-        ...d.blocked.map(g => h("p", {}, h("strong", { text: `❌ ${g.titles.length} ${g.label}: ` }), h("span", { class: "muted", text: g.titles.slice(0, 12).join(", ") + (g.titles.length > 12 ? `, +${g.titles.length - 12} more` : "") }))));
+        d.would.length ? h("p", {}, "✅ ", ...gameLinks(d.wouldGames ?? d.would.map(t => ({ title: t })), 40)) : null,
+        ...d.blocked.map(g => h("p", {}, h("strong", { text: `❌ ${g.titles.length} ${g.label}: ` }), h("span", { class: "muted" }, ...gameLinks(g.games ?? g.titles.map(t => ({ title: t })), 12)))));
     }) });
     const whyDrawer = drawer("Why no alert?", h("div", { class: "row" }, whySel, whyGo, whyAll), whyOut);
     function openWhy() {
       whyDrawer.hidden = !whyDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; walletDrawer.hidden = true;
       if (!whyDrawer.hidden) whySel.replaceChildren(h("option", { value: "", text: "Choose a game" }), ...(data?.rows ?? []).map(r => h("option", { value: r.itad_id, text: r.title })));
     }
+    // A game's title as a link to its page here (price history and details). Opens in a new tab so a list being worked on stays put.
+    const gameLink = (id, title) => id ? h("a", { href: "#/g/" + encodeURIComponent(id), class: "game-link", target: "_blank", rel: "noopener", text: title }) : document.createTextNode(title);
+    const gameLinks = (games, max) => { const out = []; games.slice(0, max).forEach((g, i) => { if (i) out.push(", "); out.push(gameLink(g.id, g.title)); }); if (games.length > max) out.push(`, +${games.length - max} more`); return out; };
     // Suggested alert prices for games that don't alert at a price yet: tick the ones to keep, then apply.
     const tgOut = h("div", { class: "muted small", text: "Looks at the last year of prices for your unowned games (starred first, up to 15) and suggests a price worth waiting for. You pick which ones to apply." });
     const tgGo = h("button", { class: "btn blue small", type: "button", text: "Suggest prices", onclick: () => busy(tgGo, async () => {
@@ -108,7 +111,7 @@
         const r = await api("/api/wishlist/targets", { picks });
         toast(`Saved a price alert for ${r.updated} game${r.updated === 1 ? "" : "s"}.`, "ok"); loadList();
       }) });
-      tgOut.replaceChildren(h("div", { class: "stack" }, ...boxes.map(({ x, b }) => h("label", { class: "row check" }, b, h("span", {}, h("strong", { text: `${x.title}: ${money(x.price, data.currency)}` }), h("span", { class: "muted small", text: " " + x.text }))))), apply);
+      tgOut.replaceChildren(h("div", { class: "stack" }, ...boxes.map(({ x, b }) => h("label", { class: "row check" }, b, h("span", {}, h("strong", {}, gameLink(x.itad_id, x.title), ": " + money(x.price, data.currency)), h("span", { class: "muted small", text: " " + x.text }))))), apply);
     }) });
     const tgDrawer = drawer("Suggested alert prices", h("div", { class: "row" }, tgGo), tgOut);
     const addDrawer = drawer("Add a game", field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField),

@@ -1368,7 +1368,7 @@ export function createDashboard({ channelCheck = null, feedHealth = null, logFee
             const [hit] = await itad.lookupTitles([title]);
             if (!hit?.id) throw new HttpError(400, `I could not find a game called ${title}.`);
             const rows = await regionPrices({ itad, fx, itadId: hit.id, home: u.region, majorOnly: u.stores === "major" }).catch(e => { throw new HttpError(502, e.message); });
-            return { game: hit.matched || title, rows };
+            return { game: hit.matched || title, id: hit.id, rows };
         },
 
 

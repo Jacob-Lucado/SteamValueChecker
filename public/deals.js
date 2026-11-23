@@ -14,7 +14,7 @@
         bundlesOut.className = "";
         if (!d.bundles.length) { bundlesOut.replaceChildren(h("div", { class: "empty", text: game.value.trim() ? "That game is not in an active bundle right now." : "None of your wishlist games are in an active bundle right now." })); return; }
         bundlesOut.replaceChildren(...d.bundles.map(b => h("div", { class: "panel" },
-          h("h3", { text: b.title }),
+          h("h3", {}, b.url && /^https:\/\//.test(b.url) ? h("a", { class: "game-link", href: b.url, target: "_blank", rel: "noopener noreferrer", text: b.title }) : b.title),
           h("p", { class: "muted small", text: [b.shop, b.expiry ? "ends " + new Date(b.expiry).toLocaleDateString() : null].filter(Boolean).join(" · ") }),
           h("div", { class: "notice " + tone(b.verdict.level), text: b.verdict.text }),
           h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Tier", "Games", "You own", "Worth today", "Saves", "On your wishlist"].map(c => h("th", { text: c })))),
@@ -30,7 +30,7 @@
     const regionBtn = h("button", { class: "btn blue", text: "Compare regions", onclick: () => busy(regionBtn, async () => {
       const r = await api("/api/regions?game=" + encodeURIComponent(regionGame.value.trim()));
       const ranked = r.rows.some(x => x.usd !== null);
-      regionOut.replaceChildren(h("div", { class: "panel" }, h("h3", { text: r.game + ": price by region" }),
+      regionOut.replaceChildren(h("div", { class: "panel" }, h("h3", {}, r.id ? h("a", { class: "game-link", href: "#/g/" + encodeURIComponent(r.id), text: r.game }) : r.game, ": price by region"),
         h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { text: "Region" }), h("th", { text: "Cheapest" }), h("th", { text: ranked ? "In US dollars" : "" }), h("th", { text: "Shop" }))),
           h("tbody", {}, r.rows.map(x => h("tr", {}, h("td", { text: x.name + (x.home ? " (yours)" : "") }), h("td", { text: money(x.price, x.currency) }), h("td", { class: "muted", text: x.usd !== null && x.currency !== "USD" ? "about " + money(x.usd, "USD") : "" }), h("td", { text: x.shop })))))),
         h("p", { class: "muted small", text: "Keys and accounts are usually locked to the region they were sold in, so use this for information." })));
