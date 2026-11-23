@@ -644,7 +644,7 @@ test("the Wishlist page suggests prices for several games and applies the ticked
         await page.getByRole("button", { name: /Suggest prices/ }).evaluate(el => el.click());
         await page.getByRole("button", { name: "Suggest prices", exact: true }).evaluate(el => el.click());
         await page.getByText(/Alpha Duo: \$24\.00/).waitFor({ timeout: 10_000 });
-        await page.getByLabel("Alert me for Beta Trio").uncheck();
+        await page.getByLabel("Alert me for Beta Trio").evaluate(el => el.click());
         await page.getByRole("button", { name: "Apply the ticked ones" }).evaluate(el => el.click());
         await page.getByText(/Saved a price alert for 1 game\./).waitFor({ timeout: 10_000 });
         const by = Object.fromEntries(o.db.listItems("u1").map(i => [i.title, i]));
