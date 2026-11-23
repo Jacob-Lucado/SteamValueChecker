@@ -1316,7 +1316,7 @@
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
         const lagBad = p.lagMs > 100;
         const st = await api("/api/admin/storage").catch(() => null);
-        const [eg, se, cw, pb, fh, ca] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null), api("/api/admin/channelaudit").catch(() => null)]);
+        const [eg, se, cw, pb, fh, ca, af] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null), api("/api/admin/channelaudit").catch(() => null), api("/api/admin/affiliate").catch(() => null)]);
         const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
         const lf = await api("/api/admin/logfeed").catch(() => null);
         const lfPanel = lf && (() => {
@@ -1349,6 +1349,14 @@
             h("tbody", {}, ca.list.map(r => h("tr", {}, h("td", {}, h("b", { text: r.name }), h("div", { class: "muted small", text: r.guildId })),
               h("td", {}, r.items.map(p => h("div", {}, h("b", { text: p.what }), h("div", { class: "muted small", text: p.why + " (" + ago(p.at) + ")" })))))))))
             : h("p", { class: "muted", text: "Every channel I checked is fine." }));
+        const afPanel = af && (() => {
+          const state = h("b", { text: af.on ? "On" : "Off" });
+          const btn = h("button", { class: "btn small" + (af.on ? " gray" : ""), type: "button", text: af.on ? "Turn off" : "Turn on" });
+          btn.addEventListener("click", () => busy(btn, async () => { const r = await api("/api/admin/affiliate", { on: !af.on }); af.on = r.on; state.textContent = r.on ? "On" : "Off"; btn.textContent = r.on ? "Turn off" : "Turn on"; btn.classList.toggle("gray", r.on); toast(r.on ? "Fanatical affiliate links are on." : "Fanatical affiliate links are off."); }));
+          return h("div", { class: "panel" }, h("h3", { text: "Fanatical affiliate links" }),
+            h("p", { class: "muted", text: "When this is on, Fanatical links that go through the bundle pages are sent through Awin so a purchase can earn a commission, and the page says so. Only turn it on once Awin shows the Fanatical programme as joined." }),
+            h("p", {}, "Status: ", state), btn);
+        })();
         const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),
           eg.groups.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "Times", "Last seen"].map(c => h("th", { text: c })))),
             h("tbody", {}, eg.groups.map(g => h("tr", {}, h("td", {}, h("b", { text: g.where })), h("td", { text: g.message }), h("td", { text: String(g.count), class: g.count >= 10 ? "bad" : "" }), h("td", { text: ago(g.last) })))))) : h("p", { class: "muted", text: eg.available ? "No errors logged. Nice." : "The log isn't running." }));
@@ -1381,7 +1389,7 @@
           storagePanel,
           pbPanel,
           lfPanel,
-          fhPanel, caPanel,
+          fhPanel, caPanel, afPanel,
           errPanel,
           cwPanel,
           srvPanel,

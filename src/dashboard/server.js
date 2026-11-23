@@ -23,6 +23,7 @@ import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, SUPPORT_PAGE_URL, EXTENSIO
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { saveFix, forgetFix, FixError } from "../titlefix.js";
 import * as xposterText from "../xposter.js";
+import { affiliateOn, affiliateUrl } from "../affiliate.js";
 import { renderBundleLanding, renderDealLanding, renderBundleGone, bundleDestination, dealDestination, safePictureUrl, splitGame } from "../bundlelanding.js";
 import { resolveArt, resolveUrlArt, resolveAchIcon, ART_KINDS } from "../art.js";
 import { compareGiftRegions } from "../giftregion.js";
@@ -1745,8 +1746,9 @@ export function createDashboard({ channelCheck = null, feedHealth = null, logFee
         if (part === "go") {
             const pick = kind === "d" ? Number(new URL(req.url, "http://x").searchParams.get("i")) : NaN;
             const own = Number.isInteger(pick) && pick >= 0 ? dealDestination(splitGame(row.games?.[pick] ?? "").link) : null;
-            const target = own ?? dest;
-            if (!target) return gone(404);
+            const base = own ?? dest;
+            if (!base) return gone(404);
+            const target = affiliateUrl(base, { on: affiliateOn(db), tag: `${kind === "b" ? "bundle" : "deal"}-${id}` });
             countHit(kind, id, req, "go");
             return send(res, 302, "", { Location: target, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
         }
@@ -1768,7 +1770,7 @@ export function createDashboard({ channelCheck = null, feedHealth = null, logFee
             return send(res, 200, hit.buf, { "Content-Type": hit.type, "Cache-Control": "public, max-age=3600" });
         }
         countHit(kind, id, req, "page");
-        const opts = { origin, hasPicture: Boolean(src), inviteUrl: config.clientId ? `${origin}/invite?src=${kind === "b" ? "bundle-page" : "deal-page"}` : null, supportUrl: config.mainGuild?.inviteUrl?.() ?? null };
+        const opts = { origin, hasPicture: Boolean(src), inviteUrl: config.clientId ? `${origin}/invite?src=${kind === "b" ? "bundle-page" : "deal-page"}` : null, supportUrl: config.mainGuild?.inviteUrl?.() ?? null, affiliate: affiliateOn(db) };
         void ended; // the page works the ended state out itself
         return send(res, 200, kind === "b" ? renderBundleLanding(row, opts) : renderDealLanding(row, opts), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
     }

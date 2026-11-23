@@ -1,6 +1,7 @@
 // More admin tools: the invite report, daily numbers, moderation and server management.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
 import { HttpError } from "./http.js";
+import { affiliateOn, setAffiliate } from "../affiliate.js";
 import { PLANS } from "../square.js";
 import { REQUEST_STATUSES, MAX_NOTE as REQ_NOTE } from "../requeststore.js";
 import { UserError } from "../errors.js";
@@ -143,6 +144,16 @@ export function createAdminExtraRoutes(ctx) {
             }
             list.sort((a, b) => b.items.length - a.items.length);
             return { last: Number(db.getMeta("chanaudit:last") ?? 0), list };
+        },
+        // Fanatical affiliate links through Awin: off until the owner says Awin has accepted the site.
+        "GET /api/admin/affiliate": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            return { on: affiliateOn(db), clicks: db.listMetaPrefix("bundlego:").reduce((n, r) => n + Number(r.value || 0), 0) };
+        },
+        "POST /api/admin/affiliate": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            setAffiliate(db, Boolean(body.on));
+            return { on: affiliateOn(db) };
         },
         "POST /api/admin/feedhealth/retry": async (req, body) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");

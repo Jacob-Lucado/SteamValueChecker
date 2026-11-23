@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.104", date: "2026-11-23", title: "Fanatical affiliate links, clearly labeled", items: [
+        "Bundle pages can now send you to Fanatical through an affiliate link, so a purchase helps pay for the bot at no extra cost to you. The page says so right above the button, and every other store link is untouched.",
+    ] },
     { version: "2026.11.103", date: "2026-11-23", title: "Browser notifications fix themselves", items: [
         "A browser that was set up under older server keys could say \"On for this device\" and never get anything. The page now spots that and sets the device up again on its own, and *Send a test* re-subscribes and retries once if the first try fails.",
         "If the browser's push service still refuses the test, the message now names the service and the status it answered with.",

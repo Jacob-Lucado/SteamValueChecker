@@ -3337,6 +3337,22 @@ test("bundle landing page: shows the bundle, counts visits, redirects only to kn
     await o.close();
 });
 
+test("Fanatical affiliate links: off by default, owner switch turns them on, redirect and page disclose it", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const mk = { key: "fanatical:b1", store: "fanatical", title: "Fan Bundle", url: "https://www.fanatical.com/en/bundle/fan-bundle", image: null, games: ["A", "B"], gameCount: 2, price: "$5" };
+    o.db.upsertFeedBundle(mk);
+    const [b] = o.db.listFeedBundles({ status: "active", limit: 10 });
+    const get = (path, opts = {}) => fetch(o.base + path, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 Chrome/120", Cookie: o.cookie(), ...opts.headers }, ...opts });
+    assert.equal((await get(`/b/${b.id}/go`)).headers.get("location"), mk.url, "plain link while it's off");
+    assert.ok(!/affiliate link/.test(await (await get(`/b/${b.id}`)).text()));
+    assert.equal((await o.request("/api/admin/affiliate")).data.on, false);
+    assert.equal((await o.request("/api/admin/affiliate", { method: "POST", body: { on: true } })).data.on, true);
+    const loc = new URL((await get(`/b/${b.id}/go`)).headers.get("location"));
+    assert.equal(loc.hostname, "www.awin1.com"); assert.equal(loc.searchParams.get("clickref"), `bundle-${b.id}`); assert.equal(loc.searchParams.get("ued"), mk.url);
+    assert.match(await (await get(`/b/${b.id}`)).text(), /affiliate link/);
+    await o.close();
+});
+
 test("deal pages: free games get a landing page and counted redirect, and every post link goes through it", async () => {
     const { configureDeals, dealUrl } = await import("../src/deallinks.js");
     const { freeGamesPayload } = await import("../src/render.js");

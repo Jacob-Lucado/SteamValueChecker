@@ -54,7 +54,7 @@ function modelOf(kind, r, now) {
 
 const parsed0 = list => list.map(g => splitGame(g).text);
 
-function page(m, { origin, inviteUrl, supportUrl, now }) {
+function page(m, { origin, inviteUrl, supportUrl, now, affiliate = false }) {
     const hasPicture = Boolean(safePictureUrl(m.picture));
         const title = m.free ? `${m.title} is free on ${m.storeName}` : m.kind === "bundle" ? `${m.title} | ${m.storeName} bundle` : `${m.title} on ${m.storeName}`;
     const desc = `${m.free ? "Free to keep. " : m.price ? m.price + ". " : ""}${m.count && !m.free ? m.count + " games" + (m.games.length ? ", including " + parsed0(m.games).slice(0, 3).join(", ") : "") + ". " : ""}${endsText(m.expires, now, m.free)}. Found by the Steam Value Checker Discord bot.`.replace(/\s+/g, " ");
@@ -97,6 +97,7 @@ ${m.price ? `<div><b>${esc(m.price)}</b><span>Price</span></div>` : ""}
 ${m.count && !m.free ? `<div><b>${esc(m.count)}</b><span>Games</span></div>` : ""}
 </div>
 ${m.blurb ? `<p class="blurb">${esc(m.blurb)}</p>` : ""}
+${affiliate && /fanatical/i.test(m.storeName) ? `<p class="blurb"><small>Heads up: the Fanatical link is an affiliate link. If you buy, we may earn a small commission, and it costs you nothing extra.</small></p>` : ""}
 ${games.length && !m.free ? `<ul class="games">${games.map((g, i) => `<li>${g.link ? `<a href="${local}/go?i=${i}" rel="nofollow noopener">${esc(g.text)}</a>` : esc(g.text)}</li>`).join("")}${more > 0 ? `<li class="more">and ${more} more</li>` : ""}</ul>` : ""}
 <p class="ends${m.ended ? " over" : ""}">${esc(endsText(m.expires, now, m.free))}</p>
 ${redirect ? `<div class="redirect" id="go" data-seconds="${REDIRECT_SECONDS}" data-url="${esc(go)}">
@@ -133,12 +134,12 @@ ${redirect ? '<script src="/go.js" defer></script>' : ""}
 }
 
 /** A bundle from the feed (`b` is the stored row, games as an array). */
-export function renderBundleLanding(b, { origin, inviteUrl = null, supportUrl = null, now = Date.now(), hasPicture = false } = {}) {
-    return page(modelOf("bundle", hasPicture ? b : { ...b, image: null }, now), { origin, inviteUrl, supportUrl, now });
+export function renderBundleLanding(b, { origin, inviteUrl = null, supportUrl = null, now = Date.now(), hasPicture = false, affiliate = false } = {}) {
+    return page(modelOf("bundle", hasPicture ? b : { ...b, image: null }, now), { origin, inviteUrl, supportUrl, now, affiliate });
 }
 /** A free game or other deal from `deal_pages`. */
-export function renderDealLanding(d, { origin, inviteUrl = null, supportUrl = null, now = Date.now(), hasPicture = true } = {}) {
-    return page(modelOf("deal", hasPicture ? d : { ...d, image: null }, now), { origin, inviteUrl, supportUrl, now });
+export function renderDealLanding(d, { origin, inviteUrl = null, supportUrl = null, now = Date.now(), hasPicture = true, affiliate = false } = {}) {
+    return page(modelOf("deal", hasPicture ? d : { ...d, image: null }, now), { origin, inviteUrl, supportUrl, now, affiliate });
 }
 
 /** A friendly page when the link is old or the bundle is gone. */

@@ -673,6 +673,10 @@ test("the Admin page shows the daily channel check and opens without script erro
         await page.goto(`${o.base}/admin#/system`, { waitUntil: "load" });
         await page.getByText("Daily channel check").first().waitFor({ timeout: 20_000 });
         await page.getByText(/missing Embed Links/).first().waitFor({ timeout: 10_000 });
+        await page.getByText("Fanatical affiliate links").first().waitFor({ timeout: 10_000 });
+        await page.getByRole("button", { name: "Turn on" }).first().evaluate(el => el.click());
+        await page.getByRole("button", { name: "Turn off" }).first().waitFor({ timeout: 10_000 });
+        assert.equal(o.db.getMeta("affiliate:fanatical"), "1");
         assert.deepEqual(errors, []);
         await ctx.close();
     } finally { await browser.close(); await o.close(); }
