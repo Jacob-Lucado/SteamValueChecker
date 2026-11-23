@@ -755,3 +755,19 @@ test("the Wishlist page's newer buttons come out in the browser's language", { t
         await ctx.close();
     } finally { await browser.close(); await o.close(); }
 });
+
+// Calls every plain GET endpoint as the signed-in owner and fails on a server error. A 400, 403 or 404 is fine (a missing
+// parameter, a feature that isn't set up in the test); a 500 means the route itself broke, like a helper that wasn't in scope.
+test("no dashboard GET endpoint answers with a server error", { timeout: 240_000 }, async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const SKIP = /\/(events|stream|backup|export|download|logout|callback|sse|live|updates)\b|\/api\/admin\/(backup|account)/;
+    const dir = new URL("../src/dashboard/", import.meta.url);
+    const paths = new Set();
+    for (const f of readdirSync(dir).filter(n => n.endsWith(".js"))) for (const m of readFileSync(new URL(f, dir), "utf8").matchAll(/"GET (\/api\/[^" ?]*)"/g)) if (!SKIP.test(m[1])) paths.add(m[1]);
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { botGuilds: () => true, guildList: () => [{ id: "g-admin", name: "Mine", members: 10, boosts: 0 }] }, itadExtra: { getDealsPool: async () => [] } });
+    const broken = [];
+    try {
+        for (const p of paths) { const r = await o.request(p); if (r.status >= 500 && r.status !== 503) broken.push(`${p} -> ${r.status} ${JSON.stringify(r.data)?.slice(0, 120)}`); }
+        assert.deepEqual(broken, []);
+    } finally { await o.close(); }
+});
