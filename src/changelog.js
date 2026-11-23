@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.100", date: "2026-11-22", title: "The newer Wishlist buttons speak your language", items: [
+        "*Why no alert?*, *Suggest prices*, *Check my whole list*, *Closest to alerting* and the Admin channel check are now translated into all eleven dashboard languages.",
+    ] },
     { version: "2026.11.99", date: "2026-11-22", title: "Sort your wishlist by what's about to alert", items: [
         "New sort: *Closest to alerting*, on the Wishlist page and in `/games wishlist view`. Games that already meet their rule come first, then the ones nearest to it.",
     ] },
