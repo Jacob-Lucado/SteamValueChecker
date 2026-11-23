@@ -58,9 +58,10 @@ export function whyNoAlert({ user, item, summary, owned = false, guild = null, s
         : { verdict: "would", headline: "Nothing is stopping it. If it's on sale at the next hourly check, you'll get the alert.", checks };
 }
 
-export function whyEmbed(title, res) {
+export function whyEmbed(title, res, target = null) {
     const lines = res.checks.map(c => `${c.ok ? "✅" : "❌"} ${c.text}`);
     return {
+        fields: target ? [{ name: "💡 A price worth waiting for", value: `${target.text}\nSet it with \`/games wishlist alert\`, or tap *Alert me at* in Price history on the Wishlist page.`.slice(0, 1000) }] : undefined,
         color: res.verdict === "would" ? 0x57f287 : 0xfaa61a,
         title: `Why no alert for ${title}?`,
         description: [res.verdict === "would" ? `**${res.headline}**` : `**Not sent: ${res.headline}**`, "", ...lines].join("\n").slice(0, 3900),

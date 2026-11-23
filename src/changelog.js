@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.95", date: "2026-11-22", title: "`/alerts why` suggests a price to wait for", items: [
+        "When you check a single game with `/alerts why game:…`, the answer now ends with a suggested alert price from that game's last year of prices, the same one the Wishlist page shows in Price history.",
+    ] },
     { version: "2026.11.94", date: "2026-11-22", title: "A suggested alert price for every game", items: [
         "Open *Price history* on a wishlist game and the bot now suggests an alert price: the price it has sat at or under for about the cheapest quarter of the past year, not a one-off low. One tap on *Alert me at* sets it as that game's rule.",
     ] },

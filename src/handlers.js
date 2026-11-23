@@ -39,7 +39,7 @@ import { gameFacts, withoutHidden } from "./gamefacts.js";
 import { prefsPatch, describeQuiet, describeDigest, hiddenFacts, FACT_OPTIONS } from "./prefs.js";
 import { compareLibraries, playTogether } from "./compare.js";
 import { challengeView, monthKey, MAX_GOAL } from "./challenge.js";
-import { buyOrWait } from "./advice.js";
+import { buyOrWait, suggestTarget } from "./advice.js";
 import { daysUntilBirthday } from "./friendstore.js";
 import { friendDeals, friendRows, saveFriend, birthdayEmbed } from "./friends.js";
 import { spendSummary, regionCurrency } from "./spend.js";
@@ -264,7 +264,9 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             const owned = db.listLibrary(user.discord_id).some(g => g.itad_id === found.item.itad_id);
             const store = found.item.appid ? (await gameFacts(found.item.appid).catch(() => null))?.store ?? null : null;
             const res = whyNoAlert({ user, item: found.item, summary, owned, guild: db.getGuild(user.guild_id), store, money: n => money(n, summary?.currency ?? "USD") });
-            await i.editReply({ embeds: [whyEmbed(found.item.title, res)] });
+            // A price worth setting, from the game's own history. Nice to have, so a failed history lookup just leaves it out.
+            const target = await (async () => itad.getHistory(found.item.itad_id, user.region))().then(h => suggestTarget(h, { money: n => money(n, summary?.currency ?? "USD") })).catch(() => null);
+            await i.editReply({ embeds: [whyEmbed(found.item.title, res, target)] });
         } catch (err) {
             await failed(i, "alerts why", err);
         }

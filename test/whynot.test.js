@@ -53,15 +53,21 @@ test("/alerts why: answers privately with the reason for a game on the wishlist,
     const db = openDb(":memory:"); db.ensureUser("w1", null); db.ensureUser("w2", null); db.addItems("w1", [{ itad_id: "g1", title: "Hades" }]);
     db.updateUser("w1", { paused: 1 });
     const itad = { getPrices: async ids => new Map(ids.map(id => [id, { deals: [{ shop: { name: "Steam" }, price: { amount: 10, currency: "USD" }, regular: { amount: 20 }, cut: 50, url: "https://store.steampowered.com/app/1/" }], historyLow: { all: { amount: 5 } } }])) };
-    const call = async (game, id = "w1") => {
+    const call = async (game, id = "w1", extra = {}) => {
         const out = { replies: [] };
         const i = Object.assign(out, { user: { id }, guildId: null, options: { getSubcommand: () => "why", getString: () => game }, deferReply: async () => {}, editReply: async p => { out.replies.push(p); }, reply: async p => { out.replies.push(p); } });
-        await createHandlers({ db, itad }).handleAlerts(i);
+        await createHandlers({ db, itad: { ...itad, ...extra } }).handleAlerts(i);
         return out.replies.at(-1);
     };
     const r = await call("Hades");
     assert.match(r.embeds[0].title, /Why no alert for Hades/);
+    assert.equal(r.embeds[0].fields, undefined, "no history, no suggestion");
     assert.match(r.embeds[0].description, /Not sent: Your alerts are paused/);
+    const DAY = 86400_000, n = Date.now();
+    for (const id of ["w5", "w6"]) { db.ensureUser(id, null); db.addItems(id, [{ itad_id: "g1", title: "Hades" }]); }
+    const withHistory = await call("Hades", "w5", { getHistory: async () => [{ t: n - 360 * DAY, price: 30 }, { t: n - 150 * DAY, price: 15 }, { t: n - 90 * DAY, price: 24 }, { t: n - 50 * DAY, price: 30 }] });
+    assert.match(withHistory.embeds[0].fields[0].value, /at or under \$24\.00/);
+    assert.equal((await call("Hades", "w6", { getHistory: async () => { throw new Error("down"); } })).embeds[0].fields, undefined, "a failed history lookup just leaves the tip out");
     assert.match((await call("Nope", "w2")).content ?? "", /not on your list/);
     db.ensureUser("w3", null); db.addItems("w3", [{ itad_id: "g1", title: "Hades" }]);
     const all = await call(null, "w3");
@@ -109,4 +115,14 @@ test("filter preview: shows which games a stricter or looser filter lets through
     assert.equal(strict.preview, strict.now - 1);
     const none = await previewFilters({ db, itad, user: { ...user, discord_id: "nobody" }, change: { min_discount: 40 }, now });
     assert.equal(none.total, 0);
+});
+
+test("why no alert: the embed adds a suggested price when the game has a price history", async () => {
+    const { suggestTarget } = await import("../src/advice.js");
+    const now = Date.now(), DAY = 86400_000;
+    const t = suggestTarget([{ t: now - 360 * DAY, price: 30 }, { t: now - 150 * DAY, price: 15 }, { t: now - 90 * DAY, price: 24 }, { t: now - 50 * DAY, price: 30 }], { now });
+    const e = whyEmbed("Hades", run(), t);
+    assert.match(e.fields[0].name, /worth waiting for/);
+    assert.match(e.fields[0].value, /at or under \$24\.00/);
+    assert.equal(whyEmbed("Hades", run()).fields, undefined);
 });
