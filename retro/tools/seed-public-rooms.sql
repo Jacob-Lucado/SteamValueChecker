@@ -128,3 +128,7 @@ INSERT INTO room_models (id,door_x,door_y,door_z,door_dir,heightmap,required_clu
 INSERT INTO rooms (roomtype,caption,owner,description,category,state,users_max,model_name,tags,wallpaper,floor,landscape) VALUES ('private','Main Office',@owner,'The main office behind the welcome lounge.',29,'open',50,'model_ofc15','public|hotel|2015','0.0','0.0','0.0');
 SET @room = LAST_INSERT_ID();
 INSERT INTO navigator_publics (room_id,caption,description,image_url,order_num,enabled) VALUES (@room,'Main Office','The main office behind the welcome lounge.','',10,1);
+INSERT INTO items (user_id,room_id,base_item,extra_data,x,y,z,rot,wall_pos,limited_number,limited_stack) SELECT @owner,@room,id,'0',4,1,0,0,'',0,0 FROM furniture WHERE item_name='room_wlof15_bed' LIMIT 1;
+INSERT INTO items (user_id,room_id,base_item,extra_data,x,y,z,rot,wall_pos,limited_number,limited_stack) SELECT @owner,@room,id,'0',5,8,0,2,'',0,0 FROM furniture WHERE item_name='room_wlof15_wardrobe' LIMIT 1;
+INSERT INTO items (user_id,room_id,base_item,extra_data,x,y,z,rot,wall_pos,limited_number,limited_stack) SELECT @owner,@room,id,'0',8,1,0,0,'',0,0 FROM furniture WHERE item_name='room_wlof15_bookcase' LIMIT 1;
+INSERT INTO items (user_id,room_id,base_item,extra_data,x,y,z,rot,wall_pos,limited_number,limited_stack) SELECT @owner,@room,id,'0',9,5,0,4,'',0,0 FROM furniture WHERE item_name='room_wlof15_chair' LIMIT 1;
