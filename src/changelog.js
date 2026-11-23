@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.101", date: "2026-11-22", title: "Alert distances in your language", items: [
+        "The line on each wishlist card that says how far a game is from your alert rule (\"$4.00 above your price\", \"10% more off needed\", \"meets your rule\") is now translated too.",
+    ] },
     { version: "2026.11.100", date: "2026-11-22", title: "The newer Wishlist buttons speak your language", items: [
         "*Why no alert?*, *Suggest prices*, *Check my whole list*, *Closest to alerting* and the Admin channel check are now translated into all eleven dashboard languages.",
     ] },
