@@ -33,6 +33,21 @@ export function meetsTrigger(item, now) {
 }
 
 /**
+ * How far a game is from its alert rule: null when there is nothing to measure (no price, or "any sale"), otherwise
+ * { met: true } or { met: false, price: <amount still to drop> } / { met: false, percent: <points of discount still needed> } / { met: false, atl: <amount above the all-time low> }.
+ */
+export function triggerGap(item, now) {
+    if (now.price === null) return null;
+    if (meetsTrigger(item, now)) return item.trigger_type === "any" ? null : { met: true };
+    switch (item.trigger_type) {
+        case "price": return item.trigger_value != null ? { met: false, price: Math.round((now.price - item.trigger_value) * 100) / 100 } : null;
+        case "percent": return { met: false, percent: Math.max(1, Math.ceil((item.trigger_value ?? 0) - now.discount * 100 - EPS)) };
+        case "atl": return now.atl !== null ? { met: false, atl: Math.round((now.price - now.atl) * 100) / 100 } : null;
+        default: return null;
+    }
+}
+
+/**
  * Returns { action: "alert" | "reset" | "none", reason }.
  * - alert: the trigger is met and this is new (never alerted for this sale, or the price dropped further)
  * - reset: the trigger is no longer met, so a future sale should alert again

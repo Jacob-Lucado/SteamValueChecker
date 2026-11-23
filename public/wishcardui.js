@@ -52,12 +52,21 @@
         steamArt(r.appid, "fy-art", 460, 215, r.itad_id),
         h("div", { class: "fy-info" },
           h("a", { href: "#/g/" + r.itad_id, class: "fy-title game-link", text: r.title }),
-          h("span", { class: "muted small", text: [best?.shop, r.alert].filter(Boolean).join(" · ") }),
+          h("span", { class: "muted small", text: [best?.shop, r.alert, gapText(r.gap, cur, money)].filter(Boolean).join(" · ") }),
           h("span", { class: "wl-tags" }, verdictBadge(r.verdict), r.owned ? h("span", { class: "badge none", text: "Owned" }) : null, r.priority ? h("span", { class: "badge none", text: "★ Priority" }) : null, r.release_at ? h("span", { class: "badge none", text: "Out " + new Date(r.release_at).toLocaleDateString() }) : null)),
         h("div", { class: "fy-price" }, sale ? h("span", { class: "fy-cut", text: "-" + pct + "%" }) : null, h("b", { class: sale ? "" : "wl-flat", text: best ? money(best.price, cur) : "no price" }), sale && r.regular !== null ? h("s", { text: money(r.regular, cur) }) : null),
         toggle),
       more);
     return card;
+  }
+  // "$4.00 to go", "10% more off needed", or a tick once the rule is met. Nothing for games with no rule to measure.
+  function gapText(g, cur, money) {
+    if (!g) return "";
+    if (g.met) return "✓ meets your rule";
+    if (g.price !== undefined) return money(g.price, cur) + " above your price";
+    if (g.percent !== undefined) return g.percent + "% more off needed";
+    if (g.atl !== undefined) return money(g.atl, cur) + " above its low";
+    return "";
   }
   root.WishCardUI = { view };
 })(window);

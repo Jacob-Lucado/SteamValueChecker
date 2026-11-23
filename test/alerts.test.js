@@ -85,3 +85,24 @@ test("sale countdowns: shown only for a real end date that is still ahead", asyn
     assert.match(e.description, /Sale ends <t:\d+:R>/);
     assert.doesNotMatch(alertEmbed({ title: "G" }, { ...n, expiry: null }, { trigger: "any" }).description, /Sale ends/);
 });
+
+test("trigger gap: how far a game is from its rule", async () => {
+    const { triggerGap, current } = await import("../src/alerts.js");
+    const now = (price, regular, atl = 5) => current({ best: { price }, msrp: regular, atl });
+    assert.deepEqual(triggerGap({ trigger_type: "price", trigger_value: 20 }, now(24, 40)), { met: false, price: 4 });
+    assert.deepEqual(triggerGap({ trigger_type: "price", trigger_value: 20 }, now(18, 40)), { met: true });
+    assert.deepEqual(triggerGap({ trigger_type: "percent", trigger_value: 50 }, now(30, 40)), { met: false, percent: 25 });
+    assert.deepEqual(triggerGap({ trigger_type: "atl" }, now(9, 40, 5)), { met: false, atl: 4 });
+    assert.equal(triggerGap({ trigger_type: "any" }, now(30, 40)), null);
+    assert.equal(triggerGap({ trigger_type: "price", trigger_value: 20 }, current(null)), null);
+});
+
+test("the /wishlist table tags each game with how far it is from its rule", async () => {
+    const { wishlistEmbed } = await import("../src/render.js");
+    const row = (title, gap) => ({ title, best: { price: 24, shop: "Steam" }, discount: 0.4, alert: "at 20.00 or less", gap });
+    const d = wishlistEmbed([row("Alpha", { met: false, price: 4 }), row("Beta", { met: true }), row("Gamma", { met: false, percent: 10 }), row("Delta", null)], 0, "USD").description;
+    assert.match(d, /Alpha.*at 20\.00 or less \(-\$4\.00\)/);
+    assert.match(d, /Beta.*at 20\.00 or less ✓/);
+    assert.match(d, /Gamma.*\(\+10%\)/);
+    assert.doesNotMatch(d.split("\n").find(l => l.includes("Delta")), /✓|\(/);
+});

@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.98", date: "2026-11-22", title: "How far each game is from its alert", items: [
+        "Wishlist cards and the `/games wishlist view` table now show how close each game is to its alert rule: how much more the price has to drop, how many more percent off it needs, or a ✓ once it meets the rule.",
+    ] },
     { version: "2026.11.97", date: "2026-11-22", title: "Admin: daily channel check, and a fix", items: [
         "The Admin page's System health tab has a new *Daily channel check* panel: every server where the daily check found a channel I can't post in properly, with the reason.",
         "Fixed the Admin page's System health tab, which had stopped drawing because of a typo in the failing-posts table.",

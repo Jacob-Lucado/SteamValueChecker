@@ -314,13 +314,16 @@ export function modNoticeEmbed({ verb, server, reason = "", extra = "" }) {
 export const WISHLIST_PER_PAGE = 15;
 
 /** Wishlist overview table: one line per game with current price and discount. */
+/** A short tag for the wishlist table: a tick once the rule is met, or how far off it is. */
+const gapTag = (g, currency) => !g ? "" : g.met ? " ✓" : g.price !== undefined ? ` (-${money(g.price, currency)})` : g.percent !== undefined ? ` (+${g.percent}%)` : "";
+
 export function wishlistEmbed(rows, page, currency) {
     const pages = Math.max(1, Math.ceil(rows.length / WISHLIST_PER_PAGE));
     const head = `${fit("Game", 26)} ${left("Now", 9)} ${left("Off", 5)} ${fit("Store", 11)} Alert`;
     const body = rows.slice(page * WISHLIST_PER_PAGE, (page + 1) * WISHLIST_PER_PAGE).map(r => {
         const price = r.best?.price ?? null;
         const off = r.discount > 0 ? `${Math.round(r.discount * 100)}%` : "-";
-        return `${fit(r.title, 26)} ${left(money(price, currency), 9)} ${left(off, 5)} ${fit(r.best?.shop ?? "-", 11)} ${r.alert}`;
+        return `${fit(r.title, 26)} ${left(money(price, currency), 9)} ${left(off, 5)} ${fit(r.best?.shop ?? "-", 11)} ${r.alert}${gapTag(r.gap, currency)}`;
     });
     return {
         color: COLOR,

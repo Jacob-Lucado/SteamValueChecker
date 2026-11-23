@@ -1,7 +1,7 @@
 // Wishlist logic that does not depend on Discord: finding games, building the overview rows.
 
 import { summarize } from "./report.js";
-import { current, describeTrigger, parseTrigger, dealVerdict } from "./alerts.js";
+import { current, describeTrigger, parseTrigger, dealVerdict, triggerGap } from "./alerts.js";
 import { suggestTarget } from "./advice.js";
 
 /** Finds one of the user's games by title. Returns { item } | { ambiguous: [titles] } | { none: true }. */
@@ -43,7 +43,7 @@ export async function viewRows(db, itad, user) {
             coop: cats.some(c => /co-op/.test(c)), multi: cats.some(c => /multi-player|pvp|co-op|mmo/.test(c)), genres: (tg?.genres ?? []).filter(g => !/^early access$/i.test(g)).slice(0, 6),
             itad_id: it.itad_id, appid: it.appid ?? null, title: it.title, source: it.source,
             best: s.best, regular: now.regular, atl: now.atl, discount: now.discount, currency: s.currency,
-            alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value,
+            alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value, gap: triggerGap(it, now),
             low1y: now.low1y, low3m: now.low3m, verdict: dealVerdict(now),
             release_at: it.release_at && it.release_at > Date.now() ? it.release_at : null,
             snoozed_until: it.snooze_until && it.snooze_until > Date.now() ? it.snooze_until : null
