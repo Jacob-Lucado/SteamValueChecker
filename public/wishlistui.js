@@ -45,7 +45,9 @@
     const readViews = () => { try { const v = JSON.parse(localStorage.getItem(VIEWS_KEY) || "[]"); return Array.isArray(v) ? v.filter(x => x && typeof x.name === "string").slice(0, 12) : []; } catch { return []; } };
     const writeViews = v => { try { localStorage.setItem(VIEWS_KEY, JSON.stringify(v.slice(0, 12))); return true; } catch { return false; } };
     const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label, "aria-pressed": String(on) }); b.addEventListener("click", fn); return b; };
-    const sorters = { sale: null, cut: (a, b) => b.discount - a.discount, price: (a, b) => (a.best?.price ?? Infinity) - (b.best?.price ?? Infinity), name: (a, b) => a.title.localeCompare(b.title) };
+    // How near a game is to alerting, as a fraction of its price. Met rules come first, games with nothing to measure last.
+    const gapRank = r => { const g = r.gap, p = r.best?.price; if (!g) return Infinity; if (g.met) return -1; if (g.percent !== undefined) return g.percent / 100; return p ? (g.price ?? g.atl ?? 0) / p : Infinity; };
+    const sorters = { sale: null, cut: (a, b) => b.discount - a.discount, price: (a, b) => (a.best?.price ?? Infinity) - (b.best?.price ?? Infinity), close: (a, b) => gapRank(a) - gapRank(b), name: (a, b) => a.title.localeCompare(b.title) };
     const listBox = h("div"), drawers = h("div");
     const drawer = (title, ...kids) => h("div", { class: "wl-drawer panel", hidden: true }, h("h3", { text: title }), h("div", { class: "wl-drawer-body" }, ...kids));
     const importDrawer = drawer("Import from Steam",
@@ -119,7 +121,7 @@
       if (sorters[W.sort]) list = [...list].sort(sorters[W.sort]);
       const pages = Math.max(1, Math.ceil(list.length / PER));
       W.page = Math.min(W.page, pages - 1);
-      const sort = select([["sale", "Sales first"], ["cut", "Biggest discount"], ["price", "Lowest price"], ["name", "Name (A-Z)"]], W.sort);
+      const sort = select([["sale", "Sales first"], ["cut", "Biggest discount"], ["price", "Lowest price"], ["close", "Closest to alerting"], ["name", "Name (A-Z)"]], W.sort);
       sort.addEventListener("change", () => { W.sort = sort.value; W.page = 0; draw(); });
       const search = h("input", { type: "search", class: "wl-search", placeholder: "Search your wishlist", value: W.q, "aria-label": "Search your wishlist", maxlength: "60" });
       search.addEventListener("input", () => { W.q = search.value; W.page = 0; const pos = search.selectionStart; draw(); const s2 = listBox.parentElement.querySelector(".wl-search"); if (s2) { s2.focus(); s2.setSelectionRange(pos, pos); } });

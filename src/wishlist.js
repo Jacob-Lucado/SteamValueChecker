@@ -53,12 +53,21 @@ export async function viewRows(db, itad, user) {
     return { rows, currency: rows.find(r => r.currency)?.currency ?? "USD" };
 }
 
+/** How near a game is to alerting, as a fraction of its price (smaller is nearer; met rules come first, games with nothing to measure last). */
+export function gapRank(r) {
+    const g = r.gap, p = r.best?.price;
+    if (!g) return Infinity;
+    if (g.met) return -1;
+    if (g.percent !== undefined) return g.percent / 100;
+    return p ? (g.price ?? g.atl ?? 0) / p : Infinity;
+}
+
 /** The same filters and sorts as the Wishlist page, for /me wishlist view. Rows keep the usual order (sales first) when no sort is picked. */
 export function filterRows(rows, { show = null, sort = null, max = null } = {}) {
     const keep = { sale: r => r.discount > 0, coop: r => r.coop, multi: r => r.multi, priority: r => r.priority, unowned: r => !r.owned, soon: r => r.release_at }[show];
     let out = keep ? rows.filter(keep) : [...rows];
     if (Number(max) > 0) out = out.filter(r => r.best && r.best.price <= Number(max));
-    const by = { cut: (a, b) => b.discount - a.discount, price: (a, b) => (a.best?.price ?? Infinity) - (b.best?.price ?? Infinity), name: (a, b) => a.title.localeCompare(b.title) }[sort];
+    const by = { cut: (a, b) => b.discount - a.discount, price: (a, b) => (a.best?.price ?? Infinity) - (b.best?.price ?? Infinity), close: (a, b) => gapRank(a) - gapRank(b), name: (a, b) => a.title.localeCompare(b.title) }[sort];
     if (by) out = out.sort(by);
     return out;
 }

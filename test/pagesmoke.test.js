@@ -726,6 +726,9 @@ test("the Wishlist cards say how far each game is from its alert rule", { timeou
         await page.goto(`${o.base}/wishlist`, { waitUntil: "load" });
         await page.getByText(/\$4\.00 above your price/).waitFor({ timeout: 20_000 });
         await page.getByText(/✓ meets your rule/).waitFor({ timeout: 5_000 });
+        await page.locator("select").filter({ has: page.locator("option", { hasText: "Closest to alerting" }) }).selectOption({ label: "Closest to alerting" });
+        const titles = await page.locator(".wl-card .fy-title").allInnerTexts();
+        assert.deepEqual(titles.slice(0, 2), ["Beta Trio", "Alpha Duo"], "the game that already meets its rule comes first");
         assert.deepEqual(errors, []);
         await ctx.close();
     } finally { await browser.close(); await o.close(); }

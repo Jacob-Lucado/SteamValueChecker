@@ -106,3 +106,10 @@ test("the /wishlist table tags each game with how far it is from its rule", asyn
     assert.match(d, /Gamma.*\(\+10%\)/);
     assert.doesNotMatch(d.split("\n").find(l => l.includes("Delta")), /✓|\(/);
 });
+
+test("closest to alerting: met rules first, then the smallest gap relative to price, unmeasurable last", async () => {
+    const { filterRows } = await import("../src/wishlist.js");
+    const r = (title, gap, price = 40) => ({ title, gap, best: { price }, discount: 0 });
+    const out = filterRows([r("None", null), r("Far", { met: false, price: 30 }), r("Met", { met: true }), r("Near", { met: false, percent: 5 }), r("Mid", { met: false, price: 8 })], { sort: "close" });
+    assert.deepEqual(out.map(x => x.title), ["Met", "Near", "Mid", "Far", "None"]);
+});
