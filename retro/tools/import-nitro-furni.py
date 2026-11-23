@@ -83,8 +83,8 @@ def furnidata(text: str) -> dict[str, dict]:
         whole = json.loads(text)
         entries = [entry for kind in ("roomitemtypes", "wallitemtypes") for entry in whole.get(kind, {}).get("furnitype", [])]
     except json.JSONDecodeError:
-        # Packs split floor and wall items with "## ... ##" notes; the entries themselves are what matter.
-        body = re.sub(r"(?m)^\s*##.*##\s*$", "", text).strip().rstrip(",")
+        # Packs split floor and wall items with "## ... ##" or "<< ... >>" notes; the entries themselves are what matter.
+        body = re.sub(r"(?m)^\s*(##.*##|<<.*>>)\s*$", "", text).strip().rstrip(",")
         body = body if body.startswith("{") else "{" + body
         entries = json.loads("[" + body + ("" if body.endswith("}") else "}") + "]")
     return {entry["classname"]: entry for entry in entries if "classname" in entry}
