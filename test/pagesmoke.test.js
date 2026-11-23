@@ -694,7 +694,7 @@ test("every Admin page opens, draws something and throws no script errors", { ti
         const errors = [], empty = [];
         page.on("pageerror", e => errors.push(`${page.url()} ${e.message}`));
         await page.goto(`${o.base}/admin`, { waitUntil: "load" });
-        await page.locator(".adm-link").first().waitFor({ timeout: 20_000 });
+        await page.locator(".adm-link").first().waitFor({ state: "attached", timeout: 20_000 });
         for (const id of (process.env.ONLY ? process.env.ONLY.split(",") : ADMIN_PAGES)) {
             await page.evaluate(h => { location.hash = "#/" + h; }, id);
             await page.waitForTimeout(600);
