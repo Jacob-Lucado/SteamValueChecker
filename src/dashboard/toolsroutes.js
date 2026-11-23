@@ -31,8 +31,12 @@ export function createToolsRoutes(ctx) {
         },
         "POST /api/push/unsubscribe": async (req, body) => { const s = session(req); return pushOn().unsubscribe(s.userId, body.endpoint ? String(body.endpoint) : null); },
         "POST /api/push/test": async req => {
-            const s = session(req), n = await pushOn().send(s.userId, { title: "Steam Value Checker", body: "Browser notifications are on. Price drops will show up like this.", url: "/alerts", tag: "test" });
-            if (!n) throw new HttpError(400, "Nothing was delivered. Turn notifications on in this browser first.");
+            const s = session(req), report = [], p = pushOn();
+            const n = await p.send(s.userId, { title: "Steam Value Checker", body: "Browser notifications are on. Price drops will show up like this.", url: "/alerts", tag: "test" }, { report });
+            if (!n) {
+                const bad = report[0];
+                throw new HttpError(400, !p.devices(s.userId) ? "This browser isn't registered here. Turn notifications on again." : bad ? `The browser's push service (${bad.host}) refused it${bad.status ? " with status " + bad.status : ""}.` : "Nothing was delivered.");
+            }
             return { sent: n };
         },
         "GET /api/tools": async (req, _b, url) => {

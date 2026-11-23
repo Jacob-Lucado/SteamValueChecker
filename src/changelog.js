@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.103", date: "2026-11-23", title: "Browser notifications fix themselves", items: [
+        "A browser that was set up under older server keys could say \"On for this device\" and never get anything. The page now spots that and sets the device up again on its own, and *Send a test* re-subscribes and retries once if the first try fails.",
+        "If the browser's push service still refuses the test, the message now names the service and the status it answered with.",
+    ] },
     { version: "2026.11.102", date: "2026-11-23", title: "Game titles link to the game", items: [
         "Titles in Suggested alert prices, the Wallet planner, the *Why no alert?* lists, the Sale planner and its after-sale recap now open that game's page (price history and details).",
         "On For you, each card's title opens the game's page while the rest of the card still opens the store.",

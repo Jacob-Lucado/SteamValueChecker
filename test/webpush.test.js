@@ -53,3 +53,17 @@ test("an alert goes to the browser when push works, and by DM when it does not",
     assert.equal((await n.deliver(user, { embeds: [{ title: "Sale" }] })).via, "dm");
     assert.equal(dms.length, 1);
 });
+
+test("a refused send says which push service refused it and why, so a stale subscription can be told apart", async () => {
+    const db = openDb(":memory:"), u = ua();
+    let status = 403;
+    const push = createPush({ db, fetchImpl: async () => ({ status }) });
+    push.subscribe("u1", u.sub);
+    const report = [];
+    assert.equal(await push.send("u1", { title: "x" }, { report }), 0);
+    assert.deepEqual(report, [{ status: 403, host: "fcm.googleapis.com" }]);
+    status = 201;
+    const none = [];
+    assert.equal(await push.send("u1", { title: "x" }, { report: none }), 1);
+    assert.deepEqual(none, []);
+});

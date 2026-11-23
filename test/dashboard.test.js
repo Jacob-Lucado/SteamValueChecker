@@ -4262,3 +4262,20 @@ test("admin channel check: owner only, lists servers with audit problems and ign
         assert.match(r.data.list[0].items[0].what, /Embed Links/);
     } finally { await o.close(); }
 });
+
+test("push test: names the refusing push service so the page can re-subscribe", async () => {
+    const { createPush } = await import("../src/webpush.js");
+    const { createECDH, randomBytes } = await import("node:crypto");
+    let status = 403;
+    const e = createECDH("prime256v1"); e.generateKeys();
+    const t = await signedIn({ extra: db => ({ push: createPush({ db, fetchImpl: async () => ({ status }) }) }) });
+    try {
+        const sub = { endpoint: "https://fcm.googleapis.com/fcm/send/abc", keys: { p256dh: e.getPublicKey().toString("base64url"), auth: randomBytes(16).toString("base64url") } };
+        assert.equal((await t.request("/api/push/subscribe", { method: "POST", body: { subscription: sub } })).status, 200);
+        const bad = await t.request("/api/push/test", { method: "POST", body: {} });
+        assert.equal(bad.status, 400);
+        assert.match(bad.data.error, /fcm\.googleapis\.com\) refused it with status 403/);
+        status = 201;
+        assert.equal((await t.request("/api/push/test", { method: "POST", body: {} })).data.sent, 1);
+    } finally { await t.close(); }
+});

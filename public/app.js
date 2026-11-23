@@ -612,14 +612,35 @@ window.SVC_SITE = envIn => {
     const row = h("div", { class: "row" });
     const reg = () => navigator.serviceWorker.register("/sw.js");
     const toKey = b64 => { const p = "=".repeat((4 - b64.length % 4) % 4), r = atob((b64 + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(r, c => c.charCodeAt(0)); };
+    async function resubscribe(info, old) {
+      if (old) { const ep = old.endpoint; await old.unsubscribe().catch(() => {}); await api("/api/push/unsubscribe", { endpoint: ep }).catch(() => {}); }
+      const r = await reg(); await navigator.serviceWorker.ready;
+      const s = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toKey(info.key) });
+      await api("/api/push/subscribe", { subscription: s.toJSON() });
+      return s;
+    }
     async function draw() {
       row.replaceChildren();
       let info, sub = null;
       try { info = await api("/api/push"); sub = await (await reg()).pushManager.getSubscription(); } catch (e) { row.append(h("span", { class: "muted small", text: "Not available right now." })); return; }
       if (!info.available) { row.append(h("span", { class: "muted small", text: "Not available right now." })); return; }
+      // Subscribed under a different server key than today's: it can never receive anything, so set it up again quietly.
+      try {
+        const have = sub?.options?.applicationServerKey;
+        if (sub && have && info.key && btoa(String.fromCharCode(...new Uint8Array(have))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") !== info.key) sub = await resubscribe(info, sub);
+      } catch { /* the test button tries again and explains */ }
       if (sub) {
         const test = h("button", { type: "button", class: "btn gray small", text: "Send a test" }), off = h("button", { type: "button", class: "btn gray small", text: "Turn off on this device" });
-        test.addEventListener("click", () => busy(test, async () => { await api("/api/push/test", {}); toast("Sent. It should appear in a moment.", "ok"); }));
+        // A browser can still hold a subscription the server no longer accepts (made under older server keys). Subscribing again fixes it,
+        // so a failed test does that once on its own and tries again before giving up.
+        test.addEventListener("click", () => busy(test, async () => {
+          try { await api("/api/push/test", {}); }
+          catch (first) {
+            try { await resubscribe(info, sub); await api("/api/push/test", {}); toast("That subscription had gone stale, so I set this device up again. The test is on its way.", "ok"); return; }
+            catch (e) { throw new Error(e.message + " Check that notifications are allowed for this site in your browser and that Focus Assist or Do Not Disturb is off."); }
+          }
+          toast("Sent. It should appear in a moment. If nothing shows, check that Focus Assist or Do Not Disturb is off.", "ok");
+        }));
         off.addEventListener("click", () => busy(off, async () => { const ep = sub.endpoint; await sub.unsubscribe().catch(() => {}); await api("/api/push/unsubscribe", { endpoint: ep }); toast("Turned off here.", "ok"); await draw(); }));
         row.append(h("span", { class: "muted small", text: "On for this device. " }), test, off);
       } else {

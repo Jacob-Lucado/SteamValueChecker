@@ -64,16 +64,20 @@ export function createPush({ db, fetchImpl = fetch, contact = "mailto:admin@stea
     }
     const unsubscribe = (userId, endpoint = null) => ({ removed: db.dropPushSubsOf(userId, endpoint) });
     /** Sends one notification to every browser a person turned push on in. Returns how many accepted it. */
-    async function send(userId, { title, body = "", url = "/", tag = null }) {
+    async function send(userId, { title, body = "", url = "/", tag = null }, { report = null } = {}) {
         let ok = 0;
         const payload = JSON.stringify({ title: String(title).slice(0, 120), body: String(body).slice(0, 240), url, tag });
         for (const s of db.pushSubs(userId)) {
             try {
                 const r = await fetchImpl(s.endpoint, { method: "POST", headers: { Authorization: `vapid t=${jwt(s.endpoint)}, k=${publicKey()}`, "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", TTL: "86400", Urgency: "normal" }, body: encrypt(payload, s), signal: AbortSignal.timeout(10_000) });
                 if (r.status >= 200 && r.status < 300) ok++;
-                else if (r.status === 404 || r.status === 410) db.dropPushSub(s.endpoint);
-                else db.failPushSub(s.endpoint);
-            } catch { db.failPushSub(s.endpoint); }
+                else {
+                    // 404/410 mean the browser dropped it. 401/403 usually mean it was subscribed under different server keys.
+                    report?.push({ status: r.status, host: new URL(s.endpoint).hostname });
+                    if (r.status === 404 || r.status === 410) db.dropPushSub(s.endpoint);
+                    else db.failPushSub(s.endpoint);
+                }
+            } catch (e) { report?.push({ status: 0, host: new URL(s.endpoint).hostname, error: String(e?.message ?? e).slice(0, 80) }); db.failPushSub(s.endpoint); }
         }
         return ok;
     }
