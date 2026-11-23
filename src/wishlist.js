@@ -2,6 +2,7 @@
 
 import { summarize } from "./report.js";
 import { current, describeTrigger, parseTrigger, dealVerdict } from "./alerts.js";
+import { suggestTarget } from "./advice.js";
 
 /** Finds one of the user's games by title. Returns { item } | { ambiguous: [titles] } | { none: true }. */
 export function findItem(items, query) {
@@ -134,4 +135,24 @@ export async function runWishlistAutoSync({ db, itad, importWishlist, now = Date
         await new Promise(r => setTimeout(r, 1500));
     }
     return stats;
+}
+
+export const SUGGEST_LIMIT = 15;
+
+/**
+ * Suggested alert prices for the games on a list that don't already alert at a price: starred games first, unowned only, at most
+ * `limit` so the history lookups stay polite. Games with too little history are skipped.
+ */
+export async function suggestForList({ db, itad, user, limit = SUGGEST_LIMIT, now = Date.now() }) {
+    const owned = new Set(db.listLibrary(user.discord_id).map(x => x.itad_id));
+    const pool = db.listItems(user.discord_id).filter(i => !owned.has(i.itad_id) && i.trigger_type !== "price")
+        .sort((a, b) => Number(b.priority) - Number(a.priority)).slice(0, limit);
+    const out = [];
+    for (let at = 0; at < pool.length; at += 5) {
+        const batch = await Promise.all(pool.slice(at, at + 5).map(async it => {
+            try { return { it, target: suggestTarget(await itad.getHistory(it.itad_id, user.region), { now }) }; } catch { return { it, target: null }; }
+        }));
+        for (const { it, target } of batch) if (target) out.push({ itad_id: it.itad_id, title: it.title, price: target.price, text: target.text });
+    }
+    return { considered: pool.length, suggestions: out };
 }

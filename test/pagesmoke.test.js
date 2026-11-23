@@ -623,3 +623,35 @@ test("the Wishlist price history suggests an alert price and one click sets it",
         await ctx.close();
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the Wishlist page suggests prices for several games and applies the ticked ones", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const DAY = 86400_000, n = Date.now();
+    const getHistory = async () => [{ t: n - 360 * DAY, price: 30 }, { t: n - 150 * DAY, price: 15 }, { t: n - 90 * DAY, price: 24 }, { t: n - 50 * DAY, price: 30 }].map(p => ({ ...p, regular: 30, shop: "Steam" }));
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true }, itadExtra: { getHistory } });
+    try {
+        o.db.addItems("u1", [{ itad_id: "a", title: "Alpha Duo" }, { itad_id: "b", title: "Beta Trio" }]);
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/wishlist`, { waitUntil: "load" });
+        await page.getByText("Alpha Duo").first().waitFor({ timeout: 20_000 });
+        await page.getByRole("button", { name: /Suggest prices/ }).evaluate(el => el.click());
+        await page.getByRole("button", { name: "Suggest prices", exact: true }).evaluate(el => el.click());
+        await page.getByText(/Alpha Duo: \$24\.00/).waitFor({ timeout: 10_000 });
+        await page.getByLabel("Alert me for Beta Trio").uncheck();
+        await page.getByRole("button", { name: "Apply the ticked ones" }).evaluate(el => el.click());
+        await page.getByText(/Saved a price alert for 1 game\./).waitFor({ timeout: 10_000 });
+        const by = Object.fromEntries(o.db.listItems("u1").map(i => [i.title, i]));
+        assert.equal(by["Alpha Duo"].trigger_type, "price");
+        assert.equal(by["Alpha Duo"].trigger_value, 24);
+        assert.notEqual(by["Beta Trio"].trigger_type, "price");
+        assert.deepEqual(errors, []);
+        await ctx.close();
+    } finally { await browser.close(); await o.close(); }
+});

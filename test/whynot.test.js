@@ -126,3 +126,20 @@ test("why no alert: the embed adds a suggested price when the game has a price h
     assert.match(e.fields[0].value, /at or under \$24\.00/);
     assert.equal(whyEmbed("Hades", run()).fields, undefined);
 });
+
+test("suggested prices for the list: starred first, owned and price-rule games skipped, thin history left out", async () => {
+    const { suggestForList } = await import("../src/wishlist.js");
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:"); db.ensureUser("s1", null);
+    db.addItems("s1", [{ itad_id: "a", title: "Has History" }, { itad_id: "b", title: "Thin History" }, { itad_id: "c", title: "Owned One" }, { itad_id: "d", title: "Already Priced" }]);
+    db.setTrigger("s1", "price", 5, "d");
+    db.syncSteamGames?.("s1", [{ itad_id: "c", title: "Owned One", appid: 9, minutes: 10, lastPlayed: null }]);
+    const DAY = 86400_000, now = Date.UTC(2026, 10, 22);
+    const full = [{ t: now - 360 * DAY, price: 30 }, { t: now - 150 * DAY, price: 15 }, { t: now - 90 * DAY, price: 24 }, { t: now - 50 * DAY, price: 30 }];
+    const asked = [];
+    const itad = { getHistory: async id => { asked.push(id); return id === "a" ? full : id === "b" ? full.slice(0, 2) : []; } };
+    const r = await suggestForList({ db, itad, user: db.getUser("s1"), now });
+    assert.deepEqual(r.suggestions.map(x => [x.title, x.price]), [["Has History", 24]]);
+    assert.deepEqual(asked.sort(), ["a", "b"], "owned and already-priced games are not looked up");
+    assert.equal(r.considered, 2);
+});

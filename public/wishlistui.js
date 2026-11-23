@@ -93,6 +93,22 @@
       whyDrawer.hidden = !whyDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; walletDrawer.hidden = true;
       if (!whyDrawer.hidden) whySel.replaceChildren(h("option", { value: "", text: "Choose a game" }), ...(data?.rows ?? []).map(r => h("option", { value: r.itad_id, text: r.title })));
     }
+    // Suggested alert prices for games that don't alert at a price yet: tick the ones to keep, then apply.
+    const tgOut = h("div", { class: "muted small", text: "Looks at the last year of prices for your unowned games (starred first, up to 15) and suggests a price worth waiting for. You pick which ones to apply." });
+    const tgGo = h("button", { class: "btn blue small", type: "button", text: "Suggest prices", onclick: () => busy(tgGo, async () => {
+      const d = await api("/api/wishlist/targets");
+      tgOut.className = "";
+      if (!d.suggestions.length) { tgOut.className = "notice warn"; tgOut.textContent = d.considered ? "None of those games has enough price history to suggest a price yet." : "Every unowned game on your list already alerts at a price."; return; }
+      const boxes = d.suggestions.map(x => { const b = h("input", { type: "checkbox", checked: true, "aria-label": "Alert me for " + x.title }); return { x, b }; });
+      const apply = h("button", { class: "btn green small", type: "button", text: "Apply the ticked ones", onclick: () => busy(apply, async () => {
+        const picks = boxes.filter(o => o.b.checked).map(o => ({ itad_id: o.x.itad_id, price: o.x.price }));
+        if (!picks.length) return toast("Tick at least one game.");
+        const r = await api("/api/wishlist/targets", { picks });
+        toast(`Saved a price alert for ${r.updated} game${r.updated === 1 ? "" : "s"}.`, "ok"); loadList();
+      }) });
+      tgOut.replaceChildren(h("div", { class: "stack" }, ...boxes.map(({ x, b }) => h("label", { class: "row check" }, b, h("span", {}, h("strong", { text: `${x.title}: ${money(x.price, data.currency)}` }), h("span", { class: "muted small", text: " " + x.text }))))), apply);
+    }) });
+    const tgDrawer = drawer("Suggested alert prices", h("div", { class: "row" }, tgGo), tgOut);
     const addDrawer = drawer("Add a game", field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField),
       h("label", { class: "check" }, watchOnly, "Just watch it once: remove it after the alert, or after 30 days"), h("div", { class: "row" }, addBtn));
 
@@ -190,8 +206,8 @@
 
     app.replaceChildren(
       pageHead("Wishlist", "Sales first. You are alerted according to each game's rule."),
-      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "⇩ Export CSV", onclick: exportCsv }), h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; walletDrawer.hidden = true; } }), h("button", { class: "chip-btn", type: "button", text: "🔎 Why no alert?", onclick: openWhy }), h("button", { class: "chip-btn", type: "button", text: "💰 Wallet planner", onclick: () => { walletDrawer.hidden = !walletDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; if (!walletDrawer.hidden) walletBudget.focus(); } })),
-      importDrawer, addDrawer, walletDrawer, whyDrawer,
+      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "⇩ Export CSV", onclick: exportCsv }), h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; walletDrawer.hidden = true; } }), h("button", { class: "chip-btn", type: "button", text: "🔎 Why no alert?", onclick: openWhy }), h("button", { class: "chip-btn", type: "button", text: "💡 Suggest prices", onclick: () => { tgDrawer.hidden = !tgDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; walletDrawer.hidden = true; whyDrawer.hidden = true; } }), h("button", { class: "chip-btn", type: "button", text: "💰 Wallet planner", onclick: () => { walletDrawer.hidden = !walletDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; if (!walletDrawer.hidden) walletBudget.focus(); } })),
+      importDrawer, addDrawer, walletDrawer, whyDrawer, tgDrawer,
       listBox);
     listBox.className = "muted"; listBox.textContent = "Loading prices…";
     loadList().then(() => { listBox.className = ""; });

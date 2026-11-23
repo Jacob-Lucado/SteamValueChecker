@@ -6,7 +6,7 @@ import { wrappedData, SLIDES } from "../wrapped.js";
 import { SAMPLE_KINDS, sampleAlert } from "../samples.js";
 import { whyNoAlert, whyEverything, previewFilters } from "../whynot.js";
 import { gameFacts } from "../gamefacts.js";
-import { addGameByTitle, applySteamImport, viewRows } from "../wishlist.js";
+import { addGameByTitle, applySteamImport, viewRows, suggestForList } from "../wishlist.js";
 import { artUrl } from "../render.js";
 import { buyOrWait, suggestTarget } from "../advice.js";
 import { codeFamilies, codeGames } from "../codes.js";
@@ -159,6 +159,18 @@ export function createWishlistRoutes(ctx) {
             } catch { /* the chart works without it */ }
             try { target = suggestTarget(all); } catch { /* optional */ }
             return { title: own.title, points, advice, target };
+        },
+        // Suggested alert prices for games that don't alert at a price yet, and applying the ones the member keeps.
+        "GET /api/wishlist/targets": async (req) => {
+            const s = session(req); cooldown(s.userId, "targets");
+            return suggestForList({ db, itad, user: userRow(s), now: Date.now() });
+        },
+        "POST /api/wishlist/targets": async (req, body) => {
+            const s = session(req);
+            const mine = new Set(db.listItems(s.userId).map(i => i.itad_id));
+            const picks = (Array.isArray(body.picks) ? body.picks : []).slice(0, 50).filter(p => mine.has(String(p?.itad_id)) && Number(p.price) > 0 && Number(p.price) <= 1000);
+            for (const p of picks) db.setTrigger(s.userId, "price", Math.round(Number(p.price) * 100) / 100, String(p.itad_id));
+            return { updated: picks.length };
         },
         "POST /api/wishlist/bulk": async (req, body) => {
             const s = session(req);
