@@ -655,3 +655,25 @@ test("the Wishlist page suggests prices for several games and applies the ticked
         await ctx.close();
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the Admin page shows the daily channel check and opens without script errors", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const { reportProblem } = await import("../src/guildproblems.js");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        reportProblem(o.db, "g-admin", "audit:codes", "Game code posts: the channel is missing Embed Links", { status: 403 });
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/admin#/system`, { waitUntil: "load" });
+        await page.getByText("Daily channel check").first().waitFor({ timeout: 20_000 });
+        await page.getByText(/missing Embed Links/).first().waitFor({ timeout: 10_000 });
+        assert.deepEqual(errors, []);
+        await ctx.close();
+    } finally { await browser.close(); await o.close(); }
+});

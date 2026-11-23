@@ -4246,3 +4246,19 @@ test("admin log feed: owner only, settings are checked, and the test message is 
         assert.match(sent[0].content, /Log feed is working/);
     } finally { await o.close(); }
 });
+
+test("admin channel check: owner only, lists servers with audit problems and ignores other problems", async () => {
+    const { reportProblem } = await import("../src/guildproblems.js");
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    try {
+        assert.equal((await o.request("/api/admin/channelaudit")).data.list.length, 0);
+        reportProblem(o.db, "g1", "audit:codes", "Game code posts: missing Embed Links", { status: 403 });
+        reportProblem(o.db, "g1", "autorole", "Give new members the auto role", { status: 403 });
+        reportProblem(o.db, "g2", "autorole", "Give new members the auto role", { status: 403 });
+        const r = await o.request("/api/admin/channelaudit");
+        assert.equal(r.status, 200);
+        assert.deepEqual(r.data.list.map(x => x.guildId), ["g1"]);
+        assert.equal(r.data.list[0].items.length, 1);
+        assert.match(r.data.list[0].items[0].what, /Embed Links/);
+    } finally { await o.close(); }
+});

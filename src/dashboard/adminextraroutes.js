@@ -131,6 +131,19 @@ export function createAdminExtraRoutes(ctx) {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
             return { list: (ctx.feedHealth?.list() ?? []).map(r => ({ feature: r.feature, label: FEATURE_LABELS[r.feature] ?? r.feature, guildId: r.guildId, name: r.name, channelId: r.channelId, count: r.count, since: r.since, last: r.last, short: r.short, why: r.why, permanent: r.permanent, owner: r.owner, notifiedAt: r.notifiedAt })) };
         },
+        // What the daily channel check found: servers with a channel set up that I can't post in properly.
+        "GET /api/admin/channelaudit": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            const list = [], nameOf = id => guildList?.().find(x => x.id === id)?.name ?? null;
+            for (const row of db.listMetaPrefix("gprob:")) {
+                let items = []; try { items = JSON.parse(row.value); } catch { /* skip a damaged row */ }
+                items = (Array.isArray(items) ? items : []).filter(p => String(p.key).startsWith("audit:"));
+                const guildId = row.key.slice("gprob:".length);
+                if (items.length && !isHidden(guildId)) list.push({ guildId, name: nameOf(guildId) ?? "Server " + guildId.slice(-4), items: items.map(p => ({ what: p.what, why: p.why, at: p.at })) });
+            }
+            list.sort((a, b) => b.items.length - a.items.length);
+            return { last: Number(db.getMeta("chanaudit:last") ?? 0), list };
+        },
         "POST /api/admin/feedhealth/retry": async (req, body) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
             if (!ctx.feedHealth || !FEATURE_LABELS[body.feature]) throw new HttpError(400, "Unknown feed.");

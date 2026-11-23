@@ -1316,7 +1316,7 @@
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
         const lagBad = p.lagMs > 100;
         const st = await api("/api/admin/storage").catch(() => null);
-        const [eg, se, cw, pb, fh] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null)]);
+        const [eg, se, cw, pb, fh, ca] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null), api("/api/admin/channelaudit").catch(() => null)]);
         const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
         const lf = await api("/api/admin/logfeed").catch(() => null);
         const lfPanel = lf && (() => {
@@ -1340,8 +1340,15 @@
               h("td", {}, h("div", { text: r.short }), h("div", { class: "muted small", text: r.why })),
               h("td", { text: r.count + " since " + ago(r.since) }),
               h("td", { text: r.owner === "notified" ? "Told " + ago(r.notifiedAt) : r.owner || "Not yet" }),
-              h("td", {}, (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Retry now" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/feedhealth/retry", { feature: r.feature, guild_id: r.guildId }); toast("It will try again on the next cycle."); })); return b; })())))))
+              h("td", {}, (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Retry now" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/feedhealth/retry", { feature: r.feature, guild_id: r.guildId }); toast("It will try again on the next cycle."); })); return b; })()))))))
             : h("p", { class: "muted", text: "No server has a failing feed right now." }));
+        // The daily channel check: servers where a channel I post to is missing a permission, found before a post fails.
+        const caPanel = ca && h("div", { class: "panel" }, h("h3", { text: "Daily channel check" }),
+          h("p", { class: "muted", text: ca.last ? "Last ran " + ago(ca.last) + ". It looks at every channel a server has set up and notes a missing permission or a deleted channel before a post fails." : "It hasn't run yet. It runs once a day." }),
+          ca.list.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Problems"].map(c => h("th", { text: c })))),
+            h("tbody", {}, ca.list.map(r => h("tr", {}, h("td", {}, h("b", { text: r.name }), h("div", { class: "muted small", text: r.guildId })),
+              h("td", {}, r.items.map(p => h("div", {}, h("b", { text: p.what }), h("div", { class: "muted small", text: p.why + " (" + ago(p.at) + ")" })))))))))
+            : h("p", { class: "muted", text: "Every channel I checked is fine." }));
         const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),
           eg.groups.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "Times", "Last seen"].map(c => h("th", { text: c })))),
             h("tbody", {}, eg.groups.map(g => h("tr", {}, h("td", {}, h("b", { text: g.where })), h("td", { text: g.message }), h("td", { text: String(g.count), class: g.count >= 10 ? "bad" : "" }), h("td", { text: ago(g.last) })))))) : h("p", { class: "muted", text: eg.available ? "No errors logged. Nice." : "The log isn't running." }));
@@ -1374,7 +1381,7 @@
           storagePanel,
           pbPanel,
           lfPanel,
-          fhPanel,
+          fhPanel, caPanel,
           errPanel,
           cwPanel,
           srvPanel,
