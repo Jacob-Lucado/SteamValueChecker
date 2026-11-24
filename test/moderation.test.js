@@ -168,3 +168,15 @@ test("setup makes #mod-log and #member-log, points giveaways at #giveaways, and 
     const bits = BigInt(BOT_PERMISSIONS);
     for (const b of [1n, 2n, 13n, 40n]) assert.ok(bits & (1n << b), `permission bit ${b}`);
 });
+
+test("an appeal sent from the public page (not signed in) is marked that way in the mod log and the queue", async () => {
+    const r = rig(); r.db.setCommunity("G", { appeals_on: 1 });
+    r.api.getBan = async () => ({ reason: "spam" });
+    const { appeal } = await r.mod.appeal({ guildId: "G", userId: USER, text: "I'm sorry, it won't happen again", contact: "me@example.com", verified: false });
+    assert.equal(appeal.verified, 0); assert.equal(appeal.contact, "me@example.com");
+    const e = r.calls.find(c => c.t === "log").p.embeds[0];
+    assert.match(JSON.stringify(e.fields), /not signed in/); assert.match(JSON.stringify(e.fields), /me@example.com/);
+    r.db.decideAppeal("G", appeal.id, "denied", MOD, Date.now());
+    const again = await r.mod.appeal({ guildId: "G", userId: USER, text: "A signed-in appeal, same person here" });
+    assert.equal(again.appeal.verified, 1);
+});

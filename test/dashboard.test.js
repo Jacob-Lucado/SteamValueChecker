@@ -4305,3 +4305,26 @@ test("known scam accounts: owner can list and clear them, others can't", async (
     assert.equal((await o.request("/api/admin/scammers")).data.total, 0);
     await o.close();
 });
+
+test("public appeal: needs no sign-in, only for restricted people, one at a time, and only the owner answers", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const WHO = "900000000000000888";
+    const send = (body) => fetch(o.base + "/api/public/appeal", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "dashboard" }, body: JSON.stringify(body) });
+    assert.equal((await send({ kind: "site", user_id: "12", text: "please let me back in, sorry" })).status, 400, "not an ID");
+    assert.equal((await send({ kind: "site", user_id: WHO, text: "please let me back in, sorry" })).status, 404, "not restricted");
+    o.db.banUser(WHO, "spam", "u1");
+    assert.equal((await send({ kind: "site", user_id: WHO, text: "short" })).status, 400);
+    assert.equal((await send({ kind: "site", user_id: WHO, text: "I'm sorry about the spam, it was a mistake" })).status, 200);
+    assert.equal((await send({ kind: "site", user_id: WHO, text: "I'm sorry about the spam, it was a mistake" })).status, 409, "one at a time");
+    const list = (await o.request("/api/admin/appeals")).data.appeals; assert.equal(list.length, 1); assert.equal(list[0].reason, "spam"); assert.equal(list[0].verified, 0);
+    assert.ok(o.db.listNotifications("u1").some(n => n.type === "appeal"), "the owner is notified");
+    const anon = await fetch(o.base + "/api/admin/appeals"); assert.ok([401, 403].includes(anon.status), "signed-out visitors can't read the queue");
+    const denied = await o.request("/api/admin/appeals/decide", { method: "POST", body: { id: list[0].id, accept: false, note: "Not yet." } }); assert.equal(denied.status, 200);
+    assert.equal(o.db.isBanned(WHO), true, "denying keeps the restriction");
+    assert.equal((await send({ kind: "site", user_id: WHO, text: "Second try, I really am sorry about it" })).status, 200, "after an answer they can try again");
+    const id2 = (await o.request("/api/admin/appeals")).data.appeals[0].id;
+    await o.request("/api/admin/appeals/decide", { method: "POST", body: { id: id2, accept: true } });
+    assert.equal(o.db.isBanned(WHO), false);
+    assert.equal((await o.request("/api/admin/appeals/decide", { method: "POST", body: { id: id2, accept: true } })).status, 409, "already answered");
+    await o.close();
+});

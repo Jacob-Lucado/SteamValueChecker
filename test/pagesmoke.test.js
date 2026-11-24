@@ -817,3 +817,41 @@ test("For you cards link the title to the game page and the card to the store", 
         await ctx.close();
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the public appeal page works signed out and lands in the Admin panel, where accepting lifts the restriction", { timeout: 150_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    const WHO = "900000000000000777";
+    try {
+        o.db.banUser(WHO, "Spamming the server", "u1");
+        // 1. A signed-out visitor opens /appeal and sends it.
+        const anon = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+        await anon.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; anon.on("pageerror", e => errors.push(e.message));
+        await anon.goto(`${o.base}/appeal`);
+        await anon.getByText("You don't need to sign in.").first().waitFor({ timeout: 20_000 });
+        await anon.getByPlaceholder(/Your Discord user ID/).fill(WHO);
+        await anon.getByPlaceholder(/What happened/).fill("I was sorry about the spam and it won't happen again.");
+        await anon.getByPlaceholder(/Optional: how to reach you/).fill("me@example.com");
+        await anon.getByRole("button", { name: "Send appeal" }).evaluate(el => el.click());
+        await anon.getByText("Appeal sent").first().waitFor({ timeout: 10_000 });
+        assert.deepEqual(errors, []);
+        assert.equal(o.db.listAppeals("site").length, 1);
+        assert.equal(o.db.listAppeals("site")[0].contact, "me@example.com");
+        // 2. The owner sees it in Admin and accepts.
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        await page.goto(`${o.base}/admin#/system`, { waitUntil: "load" });
+        await page.getByText("Restriction appeals (1)").first().waitFor({ timeout: 20_000 });
+        await page.getByText("it won't happen again.").first().waitFor({ timeout: 5000 });
+        await page.getByRole("button", { name: "Accept and lift" }).evaluate(el => el.click());
+        await page.getByText(/The restriction is lifted/).first().waitFor({ timeout: 10_000 });
+        assert.equal(o.db.isBanned(WHO), false, "accepting lifted the restriction");
+        assert.equal(o.db.listAppeals("site", "accepted").length, 1);
+    } finally { await browser.close(); await o.close(); }
+});

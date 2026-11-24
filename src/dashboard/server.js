@@ -482,6 +482,7 @@ export function createDashboard({ channelCheck = null, feedHealth = null, logFee
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
     const bgLimit = createLimiter({ windowMs: 3600_000, max: 20, now });
     const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
+    const appealLimit = createLimiter({ windowMs: 3600_000, max: 6, now });
     const shareLimit = createLimiter({ windowMs: 60_000, max: 120, now });
     const artLimit = createLimiter({ windowMs: 60_000, max: 900, now });
     // Giveaway creates can carry a 10 MB video, so they get a much tighter budget than ordinary writes, and only a few may be in flight at once.
@@ -1054,7 +1055,7 @@ export function createDashboard({ channelCheck = null, feedHealth = null, logFee
     const profileRoutes = createProfileRoutes({ authorCard, bgLimit, config, cooldown, db, guildFor, isManager, isOwner, itad, mayPost, notifySocial, now, nowPlaying, profileEditorPayload, rest, session, slugOwner, socialRoutes, socialWrite, steamFetch, userRow });
     const playRoutes = createPlayRoutes({ botGuilds, calendar, cooldown, db, dm, guildFor, hilo, isManager, isOwner, itad, lfg, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow });
     const redeemRoutes = createRedeemRoutes({ adminExtraRoutes, botGuilds, codes, cooldown, db, dm, fortniteRoutes, indieRoutes, isOwner, itad, musicRoutes, now, overlayRoutes, serverRoutes, session, userRow, wishlistRoutes });
-    const modRoutes = createModRoutes({ MOD_ACTION_PERM, MOD_PERMS, botIn, cooldown, hasGuildPerm, isManager, md, modGuild, modr, session });
+    const modRoutes = createModRoutes({ MOD_ACTION_PERM, MOD_PERMS, appealLimit, botIn, clientIp, config, cooldown, db, dm, hasGuildPerm, isManager, isOwner, md, modGuild, mod: moderation, modr, now, session });
     const miscRoutes = createMiscRoutes({ dm, PAGES, checkoutLimit, config, cooldown, db, isOwner, log, now, origin, publicSettings, referrals, remember, rest, session, square, supporters, topgg, userRow });
     const routes = {
         ...overlayRoutes,

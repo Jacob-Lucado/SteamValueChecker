@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.113", date: "2026-11-24", title: "Ban appeals that work signed out", items: [
+        "New appeal page at /appeal that doesn't need an account, since someone who's restricted or banned can't sign in. Pick Steam Value Checker or a Discord server, add your Discord user ID and say why.",
+        "Appeals about a Steam Value Checker restriction go to the owner's Admin panel (Restriction appeals), where accepting lifts the restriction and the person gets a direct message if the bot can send one. Server appeals show on that server's Moderation page and in its mod log, marked when they were sent without signing in.",
+        "The restricted screen now has an Appeal this restriction button.",
+    ] },
     { version: "2026.11.112", date: "2026-11-24", title: "Scam guard reads names too", items: [
         "An account whose name advertises a scam service (stolen cards, cash-out and flip schemes, \"crypto recovery experts\") is removed the first time it posts anything, even something harmless. Ordinary names that happen to share a word are left alone.",
     ] },

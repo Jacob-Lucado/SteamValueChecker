@@ -239,7 +239,7 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
     }
 
     /** A banned person asks to come back. Only people who really are banned, one open appeal at a time. */
-    async function appeal({ guildId, userId, text }) {
+    async function appeal({ guildId, userId, text, contact = "", verified = true }) {
         if (!guildId || !idOk(userId)) fail(400, "That server could not be found.");
         if (!db.getCommunity(guildId).appeals_on) fail(403, "This server is not taking ban appeals.");
         const why = clean(text);
@@ -248,10 +248,10 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
         if (!ban) fail(404, "You are not banned from that server.");
         if (db.openAppeal(guildId, userId)) fail(409, "You already have an appeal waiting. The moderators will get to it.");
         const guild = await api.getGuild(guildId).catch(() => null);
-        const a = db.addAppeal(guildId, userId, why.slice(0, 1000), now());
+        const a = db.addAppeal(guildId, userId, why.slice(0, 1000), now(), { contact: clean(contact).slice(0, 120), verified: verified ? 1 : 0 });
         db.bumpUsage("mod_appeal");
         const ch = logChannel(guildId);
-        if (ch) await api.sendMessage(ch, { embeds: [{ color: 0x5865f2, title: `📨 Ban appeal #${a.id}`, description: why.slice(0, 1000), fields: [{ name: "Member", value: `<@${userId}>\n\`${userId}\``, inline: true }, { name: "Banned for", value: String(ban.reason ?? "No reason given").slice(0, 300), inline: true }], footer: { text: `Decide it on the Moderation page${guild?.name ? ` · ${guild.name}` : ""}` } }], allowed_mentions: { parse: [] } }).catch(noteFailure(db, guildId, "modlog", "post in the mod log channel"));
+        if (ch) await api.sendMessage(ch, { embeds: [{ color: 0x5865f2, title: `📨 Ban appeal #${a.id}`, description: why.slice(0, 1000), fields: [{ name: "Member", value: `<@${userId}>\n\`${userId}\``, inline: true }, { name: "Banned for", value: String(ban.reason ?? "No reason given").slice(0, 300), inline: true }, ...(verified ? [] : [{ name: "Sent from", value: `The public appeal page (not signed in)${clean(contact) ? `\nContact: ${clean(contact).slice(0, 120)}` : ""}`, inline: false }])], footer: { text: `Decide it on the Moderation page${guild?.name ? ` · ${guild.name}` : ""}` } }], allowed_mentions: { parse: [] } }).catch(noteFailure(db, guildId, "modlog", "post in the mod log channel"));
         return { appeal: a };
     }
     /** A moderator answers an appeal. Accepting lifts the ban. */

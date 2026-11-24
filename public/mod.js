@@ -144,7 +144,7 @@
             const note = h("input", { type: "text", maxlength: "300", placeholder: "Message back (optional)" }), yes = h("button", { class: "btn blue small", text: "Accept and unban" }), no = h("button", { class: "btn gray small", text: "Deny" });
             const decide = accept => busy(accept ? yes : no, async () => { await post("/api/mod/appeals/decide", { id: a.id, accept, note: note.value }); toast(accept ? "Appeal accepted, they are unbanned." : "Appeal denied.", "ok"); load(); });
             yes.addEventListener("click", () => decide(true)); no.addEventListener("click", () => decide(false));
-            return h("li", {}, h("b", { text: `#${a.id} ${a.name || a.user_id}` }), h("span", { class: "muted small", text: ` · ${new Date(a.created_at).toLocaleString()}` }), h("div", { text: a.text }), h("div", { class: "row" }, note, yes, no));
+            return h("li", {}, h("b", { text: `#${a.id} ${a.name || a.user_id}` }), h("span", { class: "muted small", text: ` · ${new Date(a.created_at).toLocaleString()}${a.verified === 0 ? " · sent from the public page, not signed in" : ""}` }), h("div", { text: a.text }), a.contact ? h("div", { class: "muted small", text: "Contact: " + a.contact }) : "", h("div", { class: "row" }, note, yes, no));
           })) : h("p", { class: "muted small", text: "Nothing waiting." }));
           if (ap.tempBans.length) parts.push(h("h4", { text: "Temporary bans" }), h("ul", { class: "plain" }, ap.tempBans.map(t => h("li", {}, `${t.user_id} · lifts ${new Date(t.lift_at).toLocaleString()}`))));
         }

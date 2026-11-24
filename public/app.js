@@ -139,7 +139,8 @@ window.SVC_SITE = envIn => {
       h("div", { style: "font-size:48px", text: "🚫" }),
       h("h2", { text: "Your access has been restricted" }),
       h("p", { text: state.restricted || "The bot owner has restricted your access to Steam Value Checker." }),
-      h("p", { class: "muted", text: "The bot won't respond to your commands and the dashboard is closed to you." })));
+      h("p", { class: "muted", text: "The bot won't respond to your commands and the dashboard is closed to you." }),
+      h("p", {}, h("a", { class: "btn blue", href: "/appeal", text: "Appeal this restriction" }))));
   }
 
   // Runs an action with the button disabled; errors become toasts.
@@ -893,11 +894,34 @@ window.SVC_SITE = envIn => {
 
   /** The server's game of the month: the pick, who is playing or finished, and (for managers) the controls. */
   async function wrappedView() { return (await lazy("WrappedUI")).view({ api, app, field, h, pageHead, select, state }); }
+  /** The appeal page. Works signed out, because someone who is restricted (or banned from a server) can't sign in to ask. */
   function appealView() {
-    let gid = ""; try { gid = new URLSearchParams(location.search).get("guild") || ""; } catch { /* no query */ }
-    const text = h("textarea", { rows: "6", maxlength: "1000", placeholder: "Why should the moderators lift your ban?" }), id = h("input", { type: "text", maxlength: "25", placeholder: "Server ID", value: gid }), go = h("button", { class: "btn blue", text: "Send appeal" });
-    go.addEventListener("click", () => busy(go, async () => { await api("/api/appeal", { guild_id: id.value.trim(), text: text.value }); text.value = ""; toast("Sent. The moderators will answer you in Discord.", "ok"); }));
-    app.replaceChildren(pageHead("Ban appeal", "Banned from a server that takes appeals? Tell its moderators why you should come back. You must be signed in with the Discord account that was banned. You get an answer by direct message."), h("div", { class: "panel" }, gid ? null : field("Server ID", id), field("Your appeal", text), h("div", { class: "row" }, go)));
+    const q = new URLSearchParams(location.search);
+    let kind = q.get("guild") ? "server" : "site";
+    const uid = h("input", { type: "text", inputmode: "numeric", maxlength: "25", placeholder: "Your Discord user ID (a long number)", value: state.me?.id || "" });
+    const gid = h("input", { type: "text", inputmode: "numeric", maxlength: "25", placeholder: "Server ID", value: q.get("guild") || "" });
+    const contact = h("input", { type: "text", maxlength: "120", placeholder: "Optional: how to reach you if you don't get a Discord message" });
+    const text = h("textarea", { rows: "6", maxlength: "1000", placeholder: "What happened, and why should it be lifted?" });
+    const go = h("button", { class: "btn blue", text: "Send appeal" });
+    const serverRow = h("div", {}, field("Server ID", gid));
+    const pick = (k, label, hint) => { const r = h("input", { type: "radio", name: "appeal-kind", checked: kind === k }); r.addEventListener("change", () => { kind = k; serverRow.hidden = k !== "server"; }); return h("label", { class: "check" }, r, h("span", {}, h("b", { text: label }), h("span", { class: "muted small", text: " " + hint }))); };
+    serverRow.hidden = kind !== "server";
+    const done = h("div", { class: "panel", hidden: true }, h("h3", { text: "Appeal sent" }), h("p", { id: "appeal-done" }));
+    const form = h("div", { class: "panel" },
+      h("p", { class: "muted small", text: "Where were you banned?" }),
+      pick("site", "From Steam Value Checker", "the bot and this site stopped working for you"),
+      pick("server", "From a Discord server", "the server must have appeals turned on"),
+      serverRow, field("Your Discord user ID", uid),
+      h("p", { class: "muted small", text: "To find it: in Discord open Settings, Advanced, turn on Developer Mode, then right-click your name and choose Copy User ID." }),
+      field("Contact (optional)", contact), field("Your appeal", text), h("div", { class: "row" }, go));
+    go.addEventListener("click", () => busy(go, async () => {
+      const body = kind === "server" ? { kind, guild_id: gid.value.trim(), user_id: uid.value.trim(), text: text.value, contact: contact.value }
+        : { kind, user_id: uid.value.trim(), text: text.value, contact: contact.value };
+      await api("/api/public/appeal", body);
+      form.hidden = true; done.hidden = false;
+      done.querySelector("#appeal-done").textContent = kind === "server" ? "The server's moderators will see it on their Moderation page. If their bot can message you, the answer comes by Discord direct message." : "It's in the owner's queue. If the bot can message you the answer comes by Discord direct message, so keep your DMs open for server members.";
+    }));
+    app.replaceChildren(pageHead("Ban appeal", "Banned from Steam Value Checker or a Discord server that takes appeals? Tell us why it should be lifted. You don't need to sign in."), form, done);
   }
   async function toolsView() { return (await lazy("ToolsUI")).view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
   async function clubView() { return (await lazy("ClubUI")).view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }
@@ -2085,7 +2109,7 @@ window.SVC_SITE = envIn => {
     }
     if (state.me && !EMBED && view !== "connect") { let pend = false; try { pend = localStorage.getItem("svc_connect") === "1"; } catch { /* storage blocked */ } if (pend) { replaceUrl("/connect"); return route(); } }
     if (!view && state.me && !EMBED) { replaceUrl("/home"); return route(); } // signed in, the bare address (and the logo) lands on Home
-    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie" && view !== "fortnite" && view !== "connect") return landing();
+    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie" && view !== "fortnite" && view !== "connect" && view !== "appeal") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); scrollTop0(); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); scrollTop0(); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); scrollTop0(); return; }

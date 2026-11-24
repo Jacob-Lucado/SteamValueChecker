@@ -1316,7 +1316,7 @@
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
         const lagBad = p.lagMs > 100;
         const st = await api("/api/admin/storage").catch(() => null);
-        const [eg, se, cw, pb, fh, ca, af, sc] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null), api("/api/admin/channelaudit").catch(() => null), api("/api/admin/affiliate").catch(() => null), api("/api/admin/scammers").catch(() => null)]);
+        const [eg, se, cw, pb, fh, ca, af, sc, ap] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null), api("/api/admin/channelaudit").catch(() => null), api("/api/admin/affiliate").catch(() => null), api("/api/admin/scammers").catch(() => null), api("/api/admin/appeals").catch(() => null)]);
         const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
         const lf = await api("/api/admin/logfeed").catch(() => null);
         const lfPanel = lf && (() => {
@@ -1357,6 +1357,17 @@
             h("p", { class: "muted", text: "When this is on, Fanatical links that go through the bundle pages are sent through Awin so a purchase can earn a commission, and the page says so. Only turn it on once Awin shows the Fanatical programme as joined." }),
             h("p", {}, "Status: ", state), btn);
         })();
+        const apPanel = ap && h("div", { class: "panel" }, h("h3", { text: `Restriction appeals (${ap.appeals.length})` }),
+          h("p", { class: "muted", text: "People you restricted who asked to come back from the public appeal page. Accepting lifts the restriction right away." }),
+          ap.appeals.length ? h("ul", { class: "plain" }, ap.appeals.map(a => {
+            const note = h("input", { type: "text", maxlength: "300", placeholder: "Optional note for them" });
+            const li = h("li", {});
+            const decide = (accept, btn) => busy(btn, async () => { const r = await api("/api/admin/appeals/decide", { id: a.id, accept, note: note.value }); li.remove(); toast(accept ? "Accepted. The restriction is lifted." + (r.told ? "" : " (Couldn't message them.)") : "Denied."); });
+            const yes = h("button", { class: "btn small", type: "button", text: "Accept and lift" }), no = h("button", { class: "btn gray small", type: "button", text: "Deny" });
+            yes.addEventListener("click", () => decide(true, yes)); no.addEventListener("click", () => decide(false, no));
+            li.append(h("b", { text: `#${a.id} ` }), h("code", { text: a.user_id }), h("span", { class: "muted small", text: ` · ${new Date(a.created_at).toLocaleString()}${a.verified ? "" : " · not signed in"}` }),
+              a.reason ? h("div", { class: "muted small", text: "Restricted for: " + a.reason }) : "", h("p", { text: a.text }), a.contact ? h("div", { class: "muted small", text: "Contact: " + a.contact }) : "", note, h("div", { class: "row" }, yes, no));
+            return li; })) : h("p", { class: "muted", text: "No appeals waiting." }));
         const scPanel = sc && h("div", { class: "panel" }, h("h3", { text: "Known scam accounts (" + sc.total + ")" }),
           h("p", { class: "muted", text: "Accounts the scam guard caught posting in any server. They are removed as they join other servers with the guard on. Clear one here if it was caught by mistake." }),
           sc.list.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Account", "Last caught", "Times", ""].map(c => h("th", { text: c })))),
@@ -1395,7 +1406,7 @@
           storagePanel,
           pbPanel,
           lfPanel,
-          fhPanel, caPanel, scPanel, afPanel,
+          fhPanel, caPanel, apPanel, scPanel, afPanel,
           errPanel,
           cwPanel,
           srvPanel,
