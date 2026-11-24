@@ -196,3 +196,26 @@ test("/mod automod can switch the scam and fake link guards and lists them", asy
     await ui.handleCommand(mk({ rule: "lines", enabled: true }));
     assert.equal(r.am.get("G").rules.lines.on, true); assert.equal(r.am.get("G").on, true);
 });
+
+test("an account caught scamming is removed as it joins another server", async () => {
+    const r = rig({});
+    await r.am.onMessage(msg({ content: SCAM, authorId: U2 }));
+    r.calls.length = 0;
+    assert.equal(await r.am.onJoin({ guildId: "H", userId: U2 }), "scammer");
+    assert.ok(r.calls.some(c => c.t === "ban" && c.id === U2));
+    r.calls.length = 0;
+    assert.equal(await r.am.onJoin({ guildId: "H", userId: U1 }), null, "someone who never scammed joins normally");
+    r.am.save("H", { scam: { action: "delete" } });
+    assert.notEqual(await r.am.onJoin({ guildId: "H", userId: U2 }), "scammer", "delete-only servers don't ban on join");
+    r.am.save("I", { scam: { on: false } });
+    assert.equal(await r.am.onJoin({ guildId: "I", userId: U2 }), null, "and neither do servers with the guard off");
+});
+
+test("the dashboard's dry run says what the guards would do and changes nothing", async () => {
+    const r = rig({});
+    const t = r.am.test("G", SCAM);
+    assert.equal(t.verdict, "scam"); assert.ok(t.hits.includes("linkables")); assert.equal(r.calls.length, 0);
+    assert.equal(r.am.test("G", "good morning, the Steam sale starts today").verdict, null);
+    assert.equal(r.am.test("G", "go to https://steamcomunity.com/gift/x").verdict, "phish");
+    assert.equal(rig({ scam: { on: false } }).am.test("G", SCAM).verdict, null);
+});

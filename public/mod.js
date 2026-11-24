@@ -87,6 +87,16 @@
           chk("Scam guard on", () => S.scam.on, v => { S.scam.on = v; }),
           chk("Fake link guard on", () => S.phish.on, v => { S.phish.on = v; }, "look-alike Steam and Discord addresses and \"free Nitro\" pages; same action as below"),
           h("div", { class: "row" }, "When it catches one, ", (() => { const sel = select([["ban", "delete the message and ban the account (and its last day of messages)"], ["kick", "delete the message and kick the account"], ["delete", "only delete the message"]], S.scam.action); sel.disabled = !edit; sel.addEventListener("change", () => { S.scam.action = sel.value; }); return sel; })()),
+          (() => {
+            const box = h("textarea", { rows: "3", placeholder: "Paste a message here to see what the guards would do with it. Nothing is deleted or banned." }), out = h("div", { class: "muted small" });
+            const go = h("button", { class: "btn gray small", type: "button", text: "Try it" });
+            go.addEventListener("click", () => busy(go, async () => {
+              if (!box.value.trim()) { out.textContent = "Paste a message first."; return; }
+              const r = await post("/api/mod/automod/test", { guild_id: guild.value, text: box.value });
+              out.textContent = r.verdict ? `Would be caught by: ${r.label}.` + (r.hits.length ? ` Matched: ${r.hits.join(", ")}.` : "") + (r.links.length ? ` Fake link: ${r.links[0]}` : "") : `Would be left alone (scam score ${r.score}).` + (!r.scamOn ? " The scam guard is off." : "");
+            }));
+            return h("div", {}, h("p", { class: "muted small", text: "Try a message" }), box, h("div", { class: "row" }, go), out);
+          })(),
           h("h4", { text: "Rules" }),
           chk("Auto-moderator on", () => S.on, v => { S.on = v; }),
           rule("spam", "Message spam", "too many messages too fast", h("div", { class: "row" }, "More than ", num(() => R.spam.count, v => { R.spam.count = v; }, 3, 20, "5em"), " messages in ", num(() => R.spam.seconds, v => { R.spam.seconds = v; }, 2, 60, "5em"), " seconds")),

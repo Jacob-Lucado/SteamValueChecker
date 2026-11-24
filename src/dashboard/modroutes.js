@@ -32,6 +32,10 @@ export function createModRoutes(ctx) {
             const s = session(req); const g = modGuild(s, String(body.guild_id), "manageGuild"); botIn(g);
             return modr(() => md.automodSave(g.id, body.settings));
         },
+        "POST /api/mod/automod/test": async (req, body) => {
+            const s = session(req); const g = modGuild(s, String(body.guild_id), "moderate"); botIn(g);
+            return modr(() => md.automodTest(g.id, body.text));
+        },
         "GET /api/mod/stats": async (req, _b, url) => {
             const s = session(req); const g = modGuild(s, url.searchParams.get("guild"), "moderate"); botIn(g);
             return modr(() => md.stats(g.id, url.searchParams.get("days")));

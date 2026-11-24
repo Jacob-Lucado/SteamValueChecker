@@ -180,6 +180,18 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
         } catch (e) { log(`automod: ${e.message}`); return null; }
     }
 
+    // Accounts caught posting scams anywhere the bot is. When one joins another server with the scam guard on, it's removed before it can post.
+    const SCAMMER = id => `scammer:${id}`;
+    const knownScammer = id => { try { return Boolean(db.getMeta(SCAMMER(id))); } catch { return false; } };
+    const markScammer = id => { try { const cur = JSON.parse(db.getMeta(SCAMMER(id)) ?? "null") ?? { n: 0 }; db.setMeta(SCAMMER(id), JSON.stringify({ at: now(), n: (cur.n ?? 0) + 1 })); } catch { /* the list is a bonus */ } };
+    /** Dry run for the dashboard's "try a message" box: what the guards would do with this text. Changes nothing. */
+    function test(guildId, content) {
+        const cfg = get(guildId), sc = scamScore(content), ph = phishLinks(content);
+        const rule = breaks(cfg, { content, mentionCount: 0, recent: [], now: now(), attachments: [], crossChannels: 1, memberAgeMin: null });
+        const verdict = cfg.scam.on && sc.scam ? "scam" : cfg.phish.on && ph.length ? "phish" : cfg.on && rule ? rule : null;
+        return { verdict, label: verdict === "scam" ? "Scam guard" : verdict === "phish" ? "Fake link guard" : verdict ? RULES[verdict] : null, score: sc.score, hits: sc.hits, links: ph, scamOn: cfg.scam.on, phishOn: cfg.phish.on, autoOn: cfg.on };
+    }
+
     /** A scam post: the message goes, and so does the account (with its last day of messages), unless the server picked a gentler action. */
     async function dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content = "", what = "Scam message (stolen cards or a cash-out scheme)" }) {
         await Promise.resolve(deleteMessage?.()).catch(() => {});
@@ -188,7 +200,7 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
             await mod.auto({ guildId, userId: authorId, action: act, reason: why, deleteSeconds: act === "ban" ? 86400 : 0, dmVerb: false })
                 .catch(e => { log(`automod scam: ${e.message}`); reportProblem(db, guildId, "automod", `${act} someone who posted a scam message (I need the ${act === "ban" ? "Ban" : "Kick"} Members permission)`, e); });
         }
-        db.bumpUsage("automod_scam");
+        db.bumpUsage("automod_scam"); markScammer(authorId);
         // Show staff what was removed, so a wrong call is easy to spot and undo.
         const ch = mod.logChannel?.(guildId);
         if (ch && api?.sendMessage) {
@@ -207,7 +219,14 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     async function onJoin({ guildId, userId, createdAtMs = null, bot = false }) {
         try {
             const cfg = get(guildId);
-            if (!cfg.raid.on || bot || userId === botId()) return null;
+            if (bot || userId === botId()) return null;
+            if (cfg.scam.on && cfg.scam.action !== "delete" && knownScammer(userId)) {
+                await mod.auto({ guildId, userId, action: cfg.scam.action, reason: "Known scam account (caught posting scams in another server)", dmVerb: false })
+                    .catch(e => { log(`scam join: ${e.message}`); reportProblem(db, guildId, "automod", `${cfg.scam.action} a known scam account as it joined`, e); });
+                db.bumpUsage("automod_scammer_join");
+                return "scammer";
+            }
+            if (!cfg.raid.on) return null;
             const R = cfg.raid, t = now(), st = joins.get(guildId) ?? { times: [], until: 0, alerted: false };
             st.times = st.times.filter(x => t - x < R.seconds * 1000); st.times.push(t); joins.set(guildId, st);
             const young = R.minAccountDays && createdAtMs && t - createdAtMs < R.minAccountDays * 86400_000;
@@ -222,5 +241,5 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
             return raiding ? "raid" : "young";
         } catch (e) { log(`raid guard: ${e.message}`); return null; }
     }
-    return { get, save, onMessage, onJoin, rules: RULES };
+    return { get, save, onMessage, onJoin, test, rules: RULES };
 }

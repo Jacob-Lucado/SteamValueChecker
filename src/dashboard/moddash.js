@@ -61,6 +61,12 @@ export function createModDash({ db, rest, mod, automod = null }) {
         db.bumpUsage("dash_automod");
         return { settings: automod.save(gid, settings) };
     }
+    function automodTest(gid, text) {
+        if (!automod?.test) fail(503, "The auto-moderator is not available right now.");
+        const t = String(text ?? "").slice(0, 2000);
+        if (!t.trim()) fail(400, "Paste a message to try.");
+        return automod.test(gid, t);
+    }
     async function stats(gid, days) {
         const rows = mod.stats(gid, days);
         const names = new Map(await Promise.all(rows.map(async r => [r.mod_id, await nameOf(gid, r.mod_id)])));
@@ -80,5 +86,5 @@ export function createModDash({ db, rest, mod, automod = null }) {
         return { warnDays: db.getCommunity(gid).warn_days ?? 0, appealsOn: Boolean(db.getCommunity(gid).appeals_on) };
     }
     const submitAppeal = (gid, userId, text) => wrap(async () => mod.appeal({ guildId: gid, userId, text }));
-    return { stats, appeals, decideAppeal, saveSettings, submitAppeal, overview, cases, act, clearWarns, setLog, automodGet, automodSave };
+    return { stats, appeals, decideAppeal, saveSettings, submitAppeal, overview, cases, act, clearWarns, setLog, automodGet, automodTest, automodSave };
 }

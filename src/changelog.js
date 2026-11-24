@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.108", date: "2026-11-23", title: "Scammers don't get a second server", items: [
+        "An account the scam guard catches in one server is now removed the moment it joins another server that has the guard on (unless that server only deletes), before it can post anything.",
+        "New \"Try a message\" box on the Moderation page: paste any text and see which guard would catch it and why. Nothing is deleted or banned.",
+    ] },
     { version: "2026.11.107", date: "2026-11-23", title: "Scam guard reports and quick switches", items: [
         "When the scam guard or the fake link guard acts, it now posts in your mod log with the text it removed (mentions defused) and how to undo it.",
         "`/mod automod` can switch the scam guard, the fake link guard and the new rules (same message in many channels, @everyone, emoji, wall of lines, risky files, new-member links) right from Discord.",
