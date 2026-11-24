@@ -3302,7 +3302,7 @@ test("every admin route turns a signed-in non-owner away", async () => {
     const src = readdirSync(new URL("../src/dashboard/", import.meta.url)).filter(f => f === "server.js" || f.endsWith("routes.js")).map(f => readFileSync(new URL(`../src/dashboard/${f}`, import.meta.url), "utf8")).join("\n"); // the routes live in a few files
     const routes = [...new Set([...src.matchAll(/^\s*"(GET|POST) (\/api\/admin\/[A-Za-z0-9_./-]+)":/gm)].map(m => [m[1], m[2]].join(" ")))];
     assert.ok(routes.length > 40, "found the routes");
-    const t = await signedIn();
+    const t = await signedIn({ config: { apiPerMinute: 5000 } }); // the sweep makes more requests than the normal per-minute cap allows
     const open = [];
     for (const r of routes) {
         const [method, path] = r.split(" ");
