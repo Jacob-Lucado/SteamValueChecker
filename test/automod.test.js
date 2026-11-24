@@ -170,3 +170,29 @@ test("new rules: crosspost, @everyone, emoji, lines, risky files and new-member 
     assert.equal(await r.am.onMessage(msg({ authorId: U2, content: "here is a picture", attachments: ["cat.png"] })), null);
     assert.deepEqual(cleanAutomod({ rules: { files: { on: true, list: ".ZIP\nrar" } } }).rules.files.list, ["zip", "rar"]);
 });
+
+test("a scam ban is reported in the mod log with the removed text, mentions defused", async () => {
+    const r = rig({});
+    r.db.setCommunity("G", { mod_log_channel: "900000000000000051" });
+    await r.am.onMessage(msg({ content: SCAM + " @everyone" }));
+    const embeds = r.calls.filter(c => c.t === "log").flatMap(c => c.p.embeds ?? []);
+    const e = embeds.find(x => /Scam guard/.test(x.title));
+    assert.ok(e, "a scam guard report was posted"); assert.match(e.title, /banned/);
+    assert.match(e.description, /hitting instantly/); assert.ok(!/@everyone/.test(e.description), "the text can't ping anyone");
+    assert.match(JSON.stringify(e.fields), /mod unban/);
+});
+
+test("/mod automod can switch the scam and fake link guards and lists them", async () => {
+    const r = rig({});
+    const { createModHandlers } = await import("../src/modhandlers.js");
+    const ui = createModHandlers({ db: r.db, mod: r.mod, automod: r.am });
+    const replies = [];
+    const mk = (opts = {}) => ({ inGuild: () => true, guildId: "G", user: { id: "900000000000000001", username: "m" }, channelId: "900000000000000099", memberPermissions: { has: () => true },
+        options: { getSubcommand: () => "automod", getString: n => opts[n] ?? null, getBoolean: n => opts[n] ?? null, getUser: () => null, getInteger: () => null, getChannel: () => null },
+        reply: async x => { replies.push(x); }, deferReply: async () => {}, editReply: async x => { replies.push(x); } });
+    await ui.handleCommand(mk({ rule: "scam", enabled: false })); await ui.handleCommand(mk({ rule: "phish", enabled: false }));
+    assert.equal(r.am.get("G").scam.on, false); assert.equal(r.am.get("G").phish.on, false); assert.equal(r.am.get("G").on, false, "the master switch isn't flipped by these");
+    assert.match(replies.pop().embeds[0].description, /Scam guard:\*\* ⚫ off/);
+    await ui.handleCommand(mk({ rule: "lines", enabled: true }));
+    assert.equal(r.am.get("G").rules.lines.on, true); assert.equal(r.am.get("G").on, true);
+});

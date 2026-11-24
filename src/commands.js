@@ -797,7 +797,10 @@ const modCmd = new SlashCommandBuilder()
         .addStringOption(o => o.setName("rule").setDescription("What to switch").addChoices(
             { name: "Everything (master switch)", value: "on" }, { name: "Message spam", value: "spam" }, { name: "Mass mentions", value: "mentions" },
             { name: "Discord invite links", value: "invites" }, { name: "Links", value: "links" }, { name: "Blocked words", value: "words" },
-            { name: "SHOUTING", value: "caps" }, { name: "Raid guard", value: "raid" }))
+            { name: "SHOUTING", value: "caps" }, { name: "Raid guard", value: "raid" },
+            { name: "Scam guard (stolen cards, cash-out posts)", value: "scam" }, { name: "Fake link guard", value: "phish" }, { name: "Same message in many channels", value: "crosspost" },
+            { name: "@everyone and @here", value: "everyone" }, { name: "Too many emoji", value: "emoji" }, { name: "Wall of lines", value: "lines" },
+            { name: "Risky file types", value: "files" }, { name: "Links from brand-new members", value: "newlinks" }))
         .addBooleanOption(o => o.setName("enabled").setDescription("Turn it on or off")))
     .addSubcommand(s => s.setName("log").setDescription("Choose where moderation actions are logged (Manage Server)")
         .addChannelOption(o => o.setName("channel").setDescription("The mod log channel").addChannelTypes(...textChan)));

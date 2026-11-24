@@ -147,8 +147,8 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
         try {
             const cfg = get(guildId);
             if (authorId === botId() || exempt(cfg, { channelId, roles, staff })) return null;
-            if (cfg.scam.on && scamScore(content).scam) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage });
-            if (cfg.phish.on && phishLinks(content).length) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, what: "A fake Steam or Discord link" });
+            if (cfg.scam.on && scamScore(content).scam) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content });
+            if (cfg.phish.on && phishLinks(content).length) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content, what: "A fake Steam or Discord link" });
             if (!cfg.on) return null;
             const k = `${guildId}:${authorId}`, t = now();
             const list = (recent.get(k) ?? []).filter(x => t - x < 60_000); list.push(t); recent.set(k, list);
@@ -181,7 +181,7 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     }
 
     /** A scam post: the message goes, and so does the account (with its last day of messages), unless the server picked a gentler action. */
-    async function dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, what = "Scam message (stolen cards or a cash-out scheme)" }) {
+    async function dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content = "", what = "Scam message (stolen cards or a cash-out scheme)" }) {
         await Promise.resolve(deleteMessage?.()).catch(() => {});
         const act = cfg.scam.action, why = `${what} in <#${channelId}>`;
         if (act !== "delete") {
@@ -189,6 +189,17 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
                 .catch(e => { log(`automod scam: ${e.message}`); reportProblem(db, guildId, "automod", `${act} someone who posted a scam message (I need the ${act === "ban" ? "Ban" : "Kick"} Members permission)`, e); });
         }
         db.bumpUsage("automod_scam");
+        // Show staff what was removed, so a wrong call is easy to spot and undo.
+        const ch = mod.logChannel?.(guildId);
+        if (ch && api?.sendMessage) {
+            const shown = String(content ?? "").replace(/`/g, "'").replace(/@(everyone|here)/gi, "@\u200b$1").slice(0, 900);
+            const verdict = act === "ban" ? "Banned" : act === "kick" ? "Kicked" : "Message removed";
+            await api.sendMessage(ch, { allowed_mentions: { parse: [] }, embeds: [{ color: 0xed4245, title: `🛡️ Scam guard: ${verdict.toLowerCase()}`,
+                description: `**${what}** from <@${authorId}> in <#${channelId}>.\n\`\`\`\n${shown || "(no text)"}\n\`\`\``,
+                fields: [{ name: "Who", value: `<@${authorId}>\n\`${authorId}\``, inline: true }, { name: "What happened", value: act === "delete" ? "Only the message was removed." : `${verdict}, and their last day of messages was deleted.`, inline: true },
+                    ...(act === "delete" ? [] : [{ name: "Wrong call?", value: "Lift it with `/mod unban`, and switch this off under Moderation on the dashboard if it keeps happening.", inline: false }])],
+                footer: { text: "Steam Value Checker · scam guard" } }] }).catch(() => {});
+        }
         return "scam";
     }
 

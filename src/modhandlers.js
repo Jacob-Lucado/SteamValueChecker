@@ -40,11 +40,11 @@ export function createModHandlers({ db, mod, automod = null, publicUrl = null })
                 const rule = o.getString("rule"), on = o.getBoolean("enabled");
                 if (rule && on !== null && on !== undefined) {
                     const cur = automod.get(gid);
-                    automod.save(gid, rule === "on" ? { on } : rule === "raid" ? { raid: { on } } : { rules: { [rule]: { on } } });
-                    if (on && rule !== "on" && !cur.on) automod.save(gid, { on: true });
+                    automod.save(gid, rule === "on" ? { on } : rule === "raid" ? { raid: { on } } : rule === "scam" ? { scam: { on } } : rule === "phish" ? { phish: { on } } : { rules: { [rule]: { on } } });
+                    if (on && !["on", "scam", "phish"].includes(rule) && !cur.on) automod.save(gid, { on: true });
                 }
                 const c = automod.get(gid), flag = v => (v ? "🟢 on" : "⚫ off");
-                const lines = [`**Auto-moderator:** ${flag(c.on)}`, ...Object.entries(automod.rules).map(([k, label]) => `• ${label}: ${flag(c.rules[k].on)}`), `• Raid guard: ${flag(c.raid.on)}`,
+                const lines = [`**Scam guard:** ${flag(c.scam.on)} (${c.scam.action === "ban" ? "bans the account" : c.scam.action === "kick" ? "kicks the account" : "deletes only"})`, `**Fake link guard:** ${flag(c.phish.on)}`, `**Auto-moderator:** ${flag(c.on)}`, ...Object.entries(automod.rules).map(([k, label]) => `• ${label}: ${flag(c.rules[k].on)}`), `• Raid guard: ${flag(c.raid.on)}`,
                     `**When a rule is broken:** the message is deleted${c.action.timeoutMinutes ? `, and they are timed out for ${c.action.timeoutMinutes} minute${c.action.timeoutMinutes === 1 ? "" : "s"}` : c.action.warn ? " and they get a warning" : ""}.`,
                     c.escalate.warns ? `**After ${c.escalate.warns} warnings:** ${c.escalate.action}${c.escalate.action === "timeout" ? ` for ${c.escalate.minutes} minutes` : ""}.` : null].filter(Boolean);
                 return i.reply({ embeds: [{ color: 0xed4245, title: "🤖 Auto-moderator", description: lines.join("\n"), footer: { text: `Blocked words, link allow-list, exemptions and the rest are on the dashboard${publicUrl ? ` at ${publicUrl}` : ""}.` } }], flags: EPHEMERAL });

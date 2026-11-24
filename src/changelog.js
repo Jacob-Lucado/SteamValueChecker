@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.107", date: "2026-11-23", title: "Scam guard reports and quick switches", items: [
+        "When the scam guard or the fake link guard acts, it now posts in your mod log with the text it removed (mentions defused) and how to undo it.",
+        "`/mod automod` can switch the scam guard, the fake link guard and the new rules (same message in many channels, @everyone, emoji, wall of lines, risky files, new-member links) right from Discord.",
+    ] },
     { version: "2026.11.106", date: "2026-11-23", title: "A much bigger auto-moderator", items: [
         "Fake link guard: look-alike Steam and Discord addresses (like steamcomunity.com) and \"free Nitro\" pages are removed the same way as scam posts. On by default; honest sites like SteamDB and SteamGifts are never touched.",
         "Six new rules in the Moderation page: the same message in several channels, @everyone and @here from non-staff, too many emoji, walls of lines, risky file types (.exe, .scr and friends), and links from members who just joined.",
