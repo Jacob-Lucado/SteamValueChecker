@@ -143,13 +143,13 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     const exempt = (cfg, { channelId, roles = [], staff }) => staff || cfg.exemptChannels.includes(channelId) || roles.some(r => cfg.exemptRoles.includes(r));
 
     /** Looks at one message. Returns the rule it broke (after dealing with it), or null. Never throws. */
-    async function onMessage({ guildId, channelId, messageId, authorId, content, mentionCount = 0, roles = [], staff = false, deleteMessage, attachments = [], joinedAt = null }) {
+    async function onMessage({ guildId, channelId, messageId, authorId, content, mentionCount = 0, roles = [], staff = false, deleteMessage, attachments = [], joinedAt = null, edited = false }) {
         try {
             const cfg = get(guildId);
             if (authorId === botId() || exempt(cfg, { channelId, roles, staff })) return null;
             if (cfg.scam.on && scamScore(content).scam) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content });
             if (cfg.phish.on && phishLinks(content).length) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content, what: "A fake Steam or Discord link" });
-            if (!cfg.on) return null;
+            if (edited || !cfg.on) return null; // an edit is only checked for scams (people post something harmless, then edit the scam in)
             const k = `${guildId}:${authorId}`, t = now();
             const list = (recent.get(k) ?? []).filter(x => t - x < 60_000); list.push(t); recent.set(k, list);
             if (recent.size > 5000) for (const [key, v] of recent) if (!v.length || t - v.at(-1) > 60_000) recent.delete(key);

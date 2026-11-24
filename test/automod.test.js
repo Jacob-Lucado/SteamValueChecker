@@ -219,3 +219,10 @@ test("the dashboard's dry run says what the guards would do and changes nothing"
     assert.equal(r.am.test("G", "go to https://steamcomunity.com/gift/x").verdict, "phish");
     assert.equal(rig({ scam: { on: false } }).am.test("G", SCAM).verdict, null);
 });
+
+test("an edit is checked for scams but not for the ordinary rules", async () => {
+    const r = rig({ on: true, rules: { lines: { on: true, max: 2 } } });
+    assert.equal(await r.am.onMessage(msg({ content: "a\nb\nc\nd", edited: true })), null, "ordinary rules skip edits");
+    assert.equal(await r.am.onMessage(msg({ content: SCAM, edited: true })), "scam");
+    assert.ok(r.calls.some(c => c.t === "ban"));
+});

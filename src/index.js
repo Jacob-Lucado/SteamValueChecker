@@ -723,6 +723,16 @@ client.on(Events.MessageCreate, async m => {
     } catch (e) { console.error(`[proof] ${e?.message}`); }
 });
 
+// A scam edited into an old, harmless message gets the same treatment as a new one.
+client.on(Events.MessageUpdate, async (before, m) => {
+    try {
+        if (!m.guildId || !m.author || m.author.bot || m.webhookId || m.system || !m.content || before?.content === m.content) return;
+        const p = m.member?.permissions;
+        const staff = m.guild?.ownerId === m.author.id || Boolean(p?.has?.(["Administrator"]) || p?.has?.(["ManageMessages"]) || p?.has?.(["ModerateMembers"]));
+        await automod.onMessage({ guildId: m.guildId, channelId: m.channelId, messageId: m.id, authorId: m.author.id, content: m.content, roles: [...(m.member?.roles?.cache?.keys?.() ?? [])], staff, deleteMessage: () => m.delete(), edited: true });
+    } catch (e) { console.error(`[automod edit] ${e?.message}`); }
+});
+
 client.on(Events.MessageCreate, async m => {
     try {
         if (!m.guildId || m.author.bot || m.webhookId || m.system) return;

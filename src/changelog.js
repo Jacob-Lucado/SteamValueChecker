@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.110", date: "2026-11-23", title: "Scam guard watches edits too", items: [
+        "A scam edited into an older, harmless message is now caught the same way as a new one. Edits are only checked for scams and fake links, not the ordinary rules.",
+    ] },
     { version: "2026.11.109", date: "2026-11-23", title: "Known scam accounts list", items: [
         "Admin → System now lists the accounts the scam guard has caught, with when and how many times, and a Clear button for any that were caught by mistake.",
     ] },
