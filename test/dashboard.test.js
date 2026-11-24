@@ -4328,3 +4328,9 @@ test("public appeal: needs no sign-in, only for restricted people, one at a time
     assert.equal((await o.request("/api/admin/appeals/decide", { method: "POST", body: { id: id2, accept: true } })).status, 409, "already answered");
     await o.close();
 });
+
+test("the restricted message points to the appeal page when the site has an address", async () => {
+    const { restrictedText } = await import("../src/dashboard/server.js");
+    assert.match(restrictedText("https://steamvaluechecker.com/"), /appeal here: https:\/\/steamvaluechecker\.com\/appeal$/);
+    assert.match(restrictedText(null), /contact the bot owner\.$/);
+});

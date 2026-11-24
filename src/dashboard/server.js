@@ -303,7 +303,8 @@ const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
 
-export const RESTRICTED_TEXT = "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard, and you won't get alerts. If you think this is a mistake, contact the bot owner.";
+export const RESTRICTED_TEXT = "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard, and you won't get alerts. If you think this is a mistake, you can appeal.";
+export const restrictedText = origin => origin ? `${RESTRICTED_TEXT.replace("you can appeal.", "you can appeal here:")} ${String(origin).replace(/\/$/, "")}/appeal` : RESTRICTED_TEXT.replace("you can appeal.", "contact the bot owner.");
 
 const MOD_PERMS = { moderate: { bit: 1n << 40n, text: "Moderate Members" }, kick: { bit: 1n << 1n, text: "Kick Members" }, ban: { bit: 1n << 2n, text: "Ban Members" }, manageMessages: { bit: 1n << 13n, text: "Manage Messages" }, manageChannels: { bit: 1n << 4n, text: "Manage Channels" }, manageGuild: { bit: MANAGE_GUILD, text: "Manage Server" } };
 const MOD_ACTION_PERM = { warn: "moderate", timeout: "moderate", untimeout: "moderate", kick: "kick", ban: "ban", unban: "ban", purge: "manageMessages", note: "moderate", slowmode: "manageChannels", lock: "manageChannels", unlock: "manageChannels" };

@@ -118,7 +118,7 @@ import { createLfgService } from "./lfg.js";
 import { createCalendarService } from "./calendar.js";
 import { createCalendarHandlers } from "./calendarhandlers.js";
 import { createLfgHandlers } from "./lfghandlers.js";
-import { createDashboard, RESTRICTED_TEXT } from "./dashboard/server.js";
+import { createDashboard, restrictedText } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
 import { createVault } from "./vault.js";
 import { createGiveawayService } from "./giveaway.js";
@@ -989,7 +989,7 @@ async function onInteraction(i, again = false) {
     if (!again) brandInteraction(i, brandOpts);
     // Restricted people get nothing from the bot (the owner can't be locked out).
     if (i.user?.id !== cfg.ownerId && db.isBanned(i.user?.id)) {
-        if (!i.isAutocomplete()) await i.reply({ content: RESTRICTED_TEXT, flags: MessageFlags.Ephemeral }).catch(() => {});
+        if (!i.isAutocomplete()) await i.reply({ content: restrictedText(cfg.dashboard?.publicUrl), flags: MessageFlags.Ephemeral }).catch(() => {});
         return;
     }
     if (i.user?.id && db.getUser(i.user.id)) db.touchUser(i.user.id);
