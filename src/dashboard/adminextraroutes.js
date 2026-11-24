@@ -145,6 +145,19 @@ export function createAdminExtraRoutes(ctx) {
             list.sort((a, b) => b.items.length - a.items.length);
             return { last: Number(db.getMeta("chanaudit:last") ?? 0), list };
         },
+        // Accounts the scam guard has caught anywhere. Removing one lets it join servers normally again.
+        "GET /api/admin/scammers": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            const list = db.listMetaPrefix("scammer:").filter(r => r.value).map(r => { let v = {}; try { v = JSON.parse(r.value) ?? {}; } catch { /* damaged row */ } return { id: r.key.slice("scammer:".length), at: Number(v.at) || 0, count: Number(v.n) || 1 }; }).sort((a, b) => b.at - a.at);
+            return { total: list.length, list: list.slice(0, 100) };
+        },
+        "POST /api/admin/scammers/clear": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            const id = String(body.id ?? "");
+            if (!/^\d{15,25}$/.test(id)) throw new HttpError(400, "That isn't a Discord user ID.");
+            db.setMeta(`scammer:${id}`, "");
+            return { ok: true };
+        },
         // Fanatical affiliate links through Awin: off until the owner says Awin has accepted the site.
         "GET /api/admin/affiliate": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");

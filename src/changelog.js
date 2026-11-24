@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.109", date: "2026-11-23", title: "Known scam accounts list", items: [
+        "Admin → System now lists the accounts the scam guard has caught, with when and how many times, and a Clear button for any that were caught by mistake.",
+    ] },
     { version: "2026.11.108", date: "2026-11-23", title: "Scammers don't get a second server", items: [
         "An account the scam guard catches in one server is now removed the moment it joins another server that has the guard on (unless that server only deletes), before it can post anything.",
         "New \"Try a message\" box on the Moderation page: paste any text and see which guard would catch it and why. Nothing is deleted or banned.",

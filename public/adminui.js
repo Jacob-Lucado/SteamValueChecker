@@ -1316,7 +1316,7 @@
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
         const lagBad = p.lagMs > 100;
         const st = await api("/api/admin/storage").catch(() => null);
-        const [eg, se, cw, pb, fh, ca, af] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null), api("/api/admin/channelaudit").catch(() => null), api("/api/admin/affiliate").catch(() => null)]);
+        const [eg, se, cw, pb, fh, ca, af, sc] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null), api("/api/admin/channelaudit").catch(() => null), api("/api/admin/affiliate").catch(() => null), api("/api/admin/scammers").catch(() => null)]);
         const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
         const lf = await api("/api/admin/logfeed").catch(() => null);
         const lfPanel = lf && (() => {
@@ -1357,6 +1357,12 @@
             h("p", { class: "muted", text: "When this is on, Fanatical links that go through the bundle pages are sent through Awin so a purchase can earn a commission, and the page says so. Only turn it on once Awin shows the Fanatical programme as joined." }),
             h("p", {}, "Status: ", state), btn);
         })();
+        const scPanel = sc && h("div", { class: "panel" }, h("h3", { text: "Known scam accounts (" + sc.total + ")" }),
+          h("p", { class: "muted", text: "Accounts the scam guard caught posting in any server. They are removed as they join other servers with the guard on. Clear one here if it was caught by mistake." }),
+          sc.list.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Account", "Last caught", "Times", ""].map(c => h("th", { text: c })))),
+            h("tbody", {}, sc.list.map(r => { const row = h("tr", {}, h("td", {}, h("code", { text: r.id })), h("td", { text: r.at ? ago(r.at) : "" }), h("td", { text: String(r.count) }),
+              h("td", {}, (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Clear" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/scammers/clear", { id: r.id }); row.remove(); toast("Cleared. It can join servers normally again."); })); return b; })())); return row; }))))
+            : h("p", { class: "muted", text: "None yet." }));
         const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),
           eg.groups.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "Times", "Last seen"].map(c => h("th", { text: c })))),
             h("tbody", {}, eg.groups.map(g => h("tr", {}, h("td", {}, h("b", { text: g.where })), h("td", { text: g.message }), h("td", { text: String(g.count), class: g.count >= 10 ? "bad" : "" }), h("td", { text: ago(g.last) })))))) : h("p", { class: "muted", text: eg.available ? "No errors logged. Nice." : "The log isn't running." }));
@@ -1389,7 +1395,7 @@
           storagePanel,
           pbPanel,
           lfPanel,
-          fhPanel, caPanel, afPanel,
+          fhPanel, caPanel, scPanel, afPanel,
           errPanel,
           cwPanel,
           srvPanel,

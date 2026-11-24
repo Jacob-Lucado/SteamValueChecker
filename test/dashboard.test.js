@@ -4295,3 +4295,13 @@ test("push test: names the refusing push service so the page can re-subscribe", 
         assert.equal((await t.request("/api/push/test", { method: "POST", body: {} })).data.sent, 1);
     } finally { await t.close(); }
 });
+
+test("known scam accounts: owner can list and clear them, others can't", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    o.db.setMeta("scammer:900000000000000021", JSON.stringify({ at: Date.now(), n: 2 }));
+    const l = (await o.request("/api/admin/scammers")).data; assert.equal(l.total, 1); assert.equal(l.list[0].count, 2);
+    assert.equal((await o.request("/api/admin/scammers/clear", { method: "POST", body: { id: "nope" } })).status, 400);
+    assert.equal((await o.request("/api/admin/scammers/clear", { method: "POST", body: { id: "900000000000000021" } })).status, 200);
+    assert.equal((await o.request("/api/admin/scammers")).data.total, 0);
+    await o.close();
+});
