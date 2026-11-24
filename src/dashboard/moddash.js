@@ -53,7 +53,7 @@ export function createModDash({ db, rest, mod, automod = null }) {
     async function automodGet(gid, { canEdit }) {
         if (!automod) fail(503, "The auto-moderator is not available right now.");
         const [channels, roles] = await Promise.all([rest.listChannels(gid).catch(() => []), Promise.resolve(rest.allRoles?.(gid)).catch(() => [])]);
-        return { settings: automod.get(gid), canEdit, rules: automod.rules, channels, roles: (roles ?? []).filter(r => r.id !== gid && !r.managed).map(r => ({ id: r.id, name: r.name })) };
+        return { settings: automod.get(gid), caught: automod.caught?.(gid) ?? { n: 0, at: 0 }, canEdit, rules: automod.rules, channels, roles: (roles ?? []).filter(r => r.id !== gid && !r.managed).map(r => ({ id: r.id, name: r.name })) };
     }
     function automodSave(gid, settings) {
         if (!automod) fail(503, "The auto-moderator is not available right now.");

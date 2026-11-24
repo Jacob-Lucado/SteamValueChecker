@@ -1360,7 +1360,7 @@
         const scPanel = sc && h("div", { class: "panel" }, h("h3", { text: "Known scam accounts (" + sc.total + ")" }),
           h("p", { class: "muted", text: "Accounts the scam guard caught posting in any server. They are removed as they join other servers with the guard on. Clear one here if it was caught by mistake." }),
           sc.list.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Account", "Last caught", "Times", ""].map(c => h("th", { text: c })))),
-            h("tbody", {}, sc.list.map(r => { const row = h("tr", {}, h("td", {}, h("code", { text: r.id })), h("td", { text: r.at ? ago(r.at) : "" }), h("td", { text: String(r.count) }),
+            h("tbody", {}, sc.list.map(r => { const row = h("tr", {}, h("td", {}, h("code", { text: r.id })), h("td", { text: r.at ? new Date(r.at).toLocaleString() : "" }), h("td", { text: String(r.count) }),
               h("td", {}, (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Clear" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/scammers/clear", { id: r.id }); row.remove(); toast("Cleared. It can join servers normally again."); })); return b; })())); return row; }))))
             : h("p", { class: "muted", text: "None yet." }));
         const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),

@@ -84,6 +84,7 @@
           edit ? null : h("div", { class: "notice warn", text: "You can see these settings, but only someone with Manage Server can change them." }),
           h("h4", { text: "Scam guard" }),
           h("p", { class: "muted small", text: "Catches the posts scam accounts paste into every channel, like stolen cards for sale, cash-out schemes and \"DM me to buy\". It's on by default and works even when the rest of the auto-moderator is off. Needs Ban Members (or Kick Members) for the account to be removed." }),
+          h("p", { class: "muted small", text: a.caught && a.caught.n ? `Stopped ${a.caught.n} scam post${a.caught.n === 1 ? "" : "s"} here so far, most recently on ${new Date(a.caught.at).toLocaleDateString()}.` : "Hasn't had to stop anything here yet." }),
           chk("Scam guard on", () => S.scam.on, v => { S.scam.on = v; }),
           chk("Fake link guard on", () => S.phish.on, v => { S.phish.on = v; }, "look-alike Steam and Discord addresses and \"free Nitro\" pages; same action as below"),
           h("div", { class: "row" }, "When it catches one, ", (() => { const sel = select([["ban", "delete the message and ban the account (and its last day of messages)"], ["kick", "delete the message and kick the account"], ["delete", "only delete the message"]], S.scam.action); sel.disabled = !edit; sel.addEventListener("change", () => { S.scam.action = sel.value; }); return sel; })()),

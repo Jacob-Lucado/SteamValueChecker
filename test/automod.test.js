@@ -226,3 +226,10 @@ test("an edit is checked for scams but not for the ordinary rules", async () => 
     assert.equal(await r.am.onMessage(msg({ content: SCAM, edited: true })), "scam");
     assert.ok(r.calls.some(c => c.t === "ban"));
 });
+
+test("the guard counts what it stops in each server", async () => {
+    const r = rig({});
+    assert.deepEqual(r.am.caught("G").n, 0);
+    await r.am.onMessage(msg({ content: SCAM })); await r.am.onMessage(msg({ content: SCAM, authorId: U2 }));
+    assert.equal(r.am.caught("G").n, 2); assert.equal(r.am.caught("H").n, 0);
+});

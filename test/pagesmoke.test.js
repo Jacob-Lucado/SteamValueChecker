@@ -143,6 +143,7 @@ test("the moderation page shows the auto-moderator and saves a change", { timeou
         await page.getByPlaceholder(/Paste a message here/).fill("selling fullz, hit me up on telegram");
         await page.getByRole("button", { name: "Try it", exact: true }).evaluate(el => el.click());
         await page.getByText(/Would be caught by: Scam guard/).waitFor({ timeout: 10_000 });
+        await page.getByText("Hasn't had to stop anything here yet.").first().waitFor({ timeout: 5000 });
         assert.equal(saved.data.settings.scam.on, true, "the scam guard is on by default"); assert.equal(saved.data.settings.phish.on, true);
         for (const name of ["Same message in several channels", "@everyone and @here", "Too many emoji", "Wall of lines", "Risky file types", "Links from brand-new members"]) await page.locator("label.check", { hasText: name }).first().waitFor({ timeout: 5000 });
         await page.locator("label.check", { hasText: "Wall of lines" }).locator("input").evaluate(el => { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); });
@@ -675,6 +676,7 @@ test("the Admin page shows the daily channel check and opens without script erro
     const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
     const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
     try {
+        o.db.setMeta("scammer:900000000000000021", JSON.stringify({ at: Date.now(), n: 2 }));
         reportProblem(o.db, "g-admin", "audit:codes", "Game code posts: the channel is missing Embed Links", { status: 403 });
         const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
         await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
@@ -684,6 +686,11 @@ test("the Admin page shows the daily channel check and opens without script erro
         await page.goto(`${o.base}/admin#/system`, { waitUntil: "load" });
         await page.getByText("Daily channel check").first().waitFor({ timeout: 20_000 });
         await page.getByText(/missing Embed Links/).first().waitFor({ timeout: 10_000 });
+        await page.getByText("Known scam accounts (1)").first().waitFor({ timeout: 10_000 });
+        await page.getByText("900000000000000021").first().waitFor({ timeout: 5000 });
+        await page.locator("tr", { hasText: "900000000000000021" }).getByRole("button", { name: "Clear" }).evaluate(el => el.click());
+        await page.waitForFunction(() => !document.body.textContent.includes("900000000000000021"), null, { timeout: 10_000 });
+        assert.equal(o.db.getMeta("scammer:900000000000000021"), "");
         await page.getByText("Fanatical affiliate links").first().waitFor({ timeout: 10_000 });
         const afPanel = page.locator(".panel", { has: page.getByRole("heading", { name: "Fanatical affiliate links" }) });
         await afPanel.getByRole("button", { name: "Turn on", exact: true }).evaluate(el => el.click());
