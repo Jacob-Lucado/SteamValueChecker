@@ -3,7 +3,7 @@
 // Settings live in one small JSON value per server, so there is no table to migrate.
 
 import { reportProblem } from "./guildproblems.js";
-import { scamScore, normalize } from "./scamfilter.js";
+import { scamScore, scamName, normalize } from "./scamfilter.js";
 import { phishLinks } from "./phishlinks.js";
 
 export const RULES = {
@@ -143,11 +143,13 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     const exempt = (cfg, { channelId, roles = [], staff }) => staff || cfg.exemptChannels.includes(channelId) || roles.some(r => cfg.exemptRoles.includes(r));
 
     /** Looks at one message. Returns the rule it broke (after dealing with it), or null. Never throws. */
-    async function onMessage({ guildId, channelId, messageId, authorId, content, mentionCount = 0, roles = [], staff = false, deleteMessage, attachments = [], joinedAt = null, edited = false }) {
+    async function onMessage({ guildId, channelId, messageId, authorId, content, mentionCount = 0, roles = [], staff = false, deleteMessage, attachments = [], joinedAt = null, edited = false, authorName = "" }) {
         try {
             const cfg = get(guildId);
             if (authorId === botId() || exempt(cfg, { channelId, roles, staff })) return null;
             if (cfg.scam.on && scamScore(content).scam) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content });
+            // A name that advertises a scam service is enough on its own, as long as they actually posted something.
+            if (cfg.scam.on && authorName && String(content ?? "").trim() && scamName(authorName)) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content, what: `A message from an account named "${String(authorName).slice(0, 40)}", which advertises a scam service` });
             if (cfg.phish.on && phishLinks(content).length) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, content, what: "A fake Steam or Discord link" });
             if (edited || !cfg.on) return null; // an edit is only checked for scams (people post something harmless, then edit the scam in)
             const k = `${guildId}:${authorId}`, t = now();

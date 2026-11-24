@@ -46,3 +46,7 @@ export function scamScore(text, { threshold = 6 } = {}) {
     for (const [re, w, name] of SIGNALS) if (re.test(t)) { score += w; hits.push(name); }
     return { scam: score >= threshold, score, hits };
 }
+
+const NAME_BAD = /\b(?:linkables?|fullz|carding|cc\s*(?:shop|dumps?|vendor)|bank\s*logs?|cash\s*app\s*flips?|money\s*flips?|clon(?:e|ed)\s*cards?|(?:btc|crypto|bitcoin)\s*recovery|recovery\s*(?:expert|hacker)|hack(?:er)?\s*for\s*hire)\b/;
+/** Is this username or display name advertising a scam service (like "BINERO LINKABLES V2")? Only unmistakable trade words count. */
+export function scamName(name) { return NAME_BAD.test(normalize(name).replace(/[_.\-]+/g, " ")); }

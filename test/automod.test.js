@@ -233,3 +233,12 @@ test("the guard counts what it stops in each server", async () => {
     await r.am.onMessage(msg({ content: SCAM })); await r.am.onMessage(msg({ content: SCAM, authorId: U2 }));
     assert.equal(r.am.caught("G").n, 2); assert.equal(r.am.caught("H").n, 0);
 });
+
+test("a message from an account named like a scam service is removed, a plain name with the same text isn't", async () => {
+    const r = rig({});
+    assert.equal(await r.am.onMessage(msg({ content: "hey everyone, anyone around?", authorName: "BINERO LINKABLES V2" })), "scam");
+    assert.ok(r.calls.some(c => c.t === "ban"));
+    r.calls.length = 0;
+    assert.equal(await r.am.onMessage(msg({ content: "hey everyone, anyone around?", authorName: "Jacob" })), null);
+    assert.equal(r.calls.length, 0);
+});
