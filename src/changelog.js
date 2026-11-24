@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.105", date: "2026-11-23", title: "Scam guard", items: [
+        "The bot now spots the posts scam accounts paste into every channel (stolen cards for sale, cash-out and flip schemes, \"DM me to buy\"), deletes them and bans the account along with its last day of messages.",
+        "It's on by default and works even if the rest of the auto-moderator is off. Staff are never touched. In the dashboard's Moderation page you can switch it off, or pick delete-only or kick instead of a ban.",
+    ] },
     { version: "2026.11.104", date: "2026-11-23", title: "Fanatical affiliate links, clearly labeled", items: [
         "Bundle pages can now send you to Fanatical through an affiliate link, so a purchase helps pay for the bot at no extra cost to you. The page says so right above the button, and every other store link is untouched.",
     ] },

@@ -226,12 +226,12 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
         return { case: await record({ guildId, guild, userId: null, modId: actorId, action: unlock ? "unlock" : "lock", reason: `<#${channelId}>${clean(reason) ? `: ${clean(reason)}` : ""}` }) };
     }
     /** What the auto-moderator and raid guard do: the bot acts on its own, so there is no moderator to gate and no DM unless asked. */
-    async function auto({ guildId, userId, action, reason, durationS = null, dmVerb = null, caseAs = null }) {
+    async function auto({ guildId, userId, action, reason, durationS = null, dmVerb = null, caseAs = null, deleteSeconds = 0 }) {
         const guild = await api.getGuild(guildId).catch(() => null);
         const why = clean(reason);
         if (action === "timeout" && durationS) await api.timeoutMember(guildId, userId, new Date(now() + Math.min(MAX_TIMEOUT_S, durationS) * 1000).toISOString(), why);
         else if (action === "kick") { if (dmVerb) await tell(userId, guild, "kicked", why); await api.kickMember(guildId, userId, why); }
-        else if (action === "ban") { if (dmVerb) await tell(userId, guild, "banned", why); await api.banMember(guildId, userId, { reason: why }); }
+        else if (action === "ban") { if (dmVerb) await tell(userId, guild, "banned", why); await api.banMember(guildId, userId, { deleteSeconds, reason: why }); }
         else if (action === "warn") { await tell(userId, guild, "warned", why); }
         const label = caseAs ?? (action === "warn" || action === "timeout" || action === "kick" || action === "ban" ? action : "automod");
         const c = await record({ guildId, guild, userId, modId: botId(), action: label, reason: `[auto] ${why}`, durationS });

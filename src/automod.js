@@ -3,6 +3,7 @@
 // Settings live in one small JSON value per server, so there is no table to migrate.
 
 import { reportProblem } from "./guildproblems.js";
+import { scamScore } from "./scamfilter.js";
 
 export const RULES = {
     spam: "Message spam",
@@ -22,6 +23,8 @@ export const DEFAULTS = Object.freeze({
         words: { on: false, list: [] },
         caps: { on: false, percent: 70, minLength: 12 }
     },
+    // Scam posts (stolen cards for sale, cash-out schemes). This one is on unless a server turns it off, and it works even when the rest of auto-mod is off.
+    scam: { on: true, action: "ban" },
     // What happens to a message that breaks a rule: it is deleted, and optionally the person is warned or timed out too.
     action: { warn: true, timeoutMinutes: 0 },
     // After this many active warnings the bot acts on its own (0 = never): "timeout" (for escalateMinutes), "kick" or "ban".
@@ -51,6 +54,7 @@ export function cleanAutomod(raw, base = DEFAULTS) {
             words: pick("words", x => ({ on: bool(x.on), list: strs(x.list, 100, 40) })),
             caps: pick("caps", x => ({ on: bool(x.on), percent: int(x.percent, 40, 100, 70), minLength: int(x.minLength, 8, 200, 12) }))
         },
+        scam: (() => { const x = { ...DEFAULTS.scam, ...(base.scam ?? {}), ...(r.scam && typeof r.scam === "object" ? r.scam : {}) }; return { on: bool(x.on, true), action: ["ban", "kick", "delete"].includes(x.action) ? x.action : "ban" }; })(),
         action: { warn: bool(ac.warn), timeoutMinutes: int(ac.timeoutMinutes, 0, 40320, 0) },
         escalate: { warns: int(esc.warns, 0, 20, 0), action: ["timeout", "kick", "ban"].includes(esc.action) ? esc.action : "timeout", minutes: int(esc.minutes, 1, 40320, 60) },
         exemptRoles: ids(r.exemptRoles ?? base.exemptRoles), exemptChannels: ids(r.exemptChannels ?? base.exemptChannels),
@@ -109,7 +113,9 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     async function onMessage({ guildId, channelId, messageId, authorId, content, mentionCount = 0, roles = [], staff = false, deleteMessage }) {
         try {
             const cfg = get(guildId);
-            if (!cfg.on || authorId === botId() || exempt(cfg, { channelId, roles, staff })) return null;
+            if (authorId === botId() || exempt(cfg, { channelId, roles, staff })) return null;
+            if (cfg.scam.on && scamScore(content).scam) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage });
+            if (!cfg.on) return null;
             const k = `${guildId}:${authorId}`, t = now();
             const list = (recent.get(k) ?? []).filter(x => t - x < 60_000); list.push(t); recent.set(k, list);
             if (recent.size > 5000) for (const [key, v] of recent) if (!v.length || t - v.at(-1) > 60_000) recent.delete(key);
@@ -129,6 +135,18 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
             }
             return rule;
         } catch (e) { log(`automod: ${e.message}`); return null; }
+    }
+
+    /** A scam post: the message goes, and so does the account (with its last day of messages), unless the server picked a gentler action. */
+    async function dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage }) {
+        await Promise.resolve(deleteMessage?.()).catch(() => {});
+        const act = cfg.scam.action, why = `Scam message (stolen cards or a cash-out scheme) in <#${channelId}>`;
+        if (act !== "delete") {
+            await mod.auto({ guildId, userId: authorId, action: act, reason: why, deleteSeconds: act === "ban" ? 86400 : 0, dmVerb: false })
+                .catch(e => { log(`automod scam: ${e.message}`); reportProblem(db, guildId, "automod", `${act} someone who posted a scam message (I need the ${act === "ban" ? "Ban" : "Kick"} Members permission)`, e); });
+        }
+        db.bumpUsage("automod_scam");
+        return "scam";
     }
 
     /** A new member joined. Returns "raid" when the raid guard dealt with them, "young" for a too-new account, else null. */

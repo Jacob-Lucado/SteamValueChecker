@@ -118,3 +118,30 @@ test("the dashboard reads and saves auto-mod settings and runs the new actions",
     const l = await md.act("G", "900000000000000002", "lock", { channel_id: "900000000000000099" }); assert.equal(l.case.action, "lock");
     const sm = await md.act("G", "900000000000000002", "slowmode", { channel_id: "900000000000000099", duration: "10s" }); assert.equal(sm.seconds, 10);
 });
+
+const SCAM = "Who need fresh and valid credit card 💳 with both visa and master cards available, once you link it know it's hitting instantly 🎯 ( These cards can be used for ATM Cashout or virtual apps for instant Cashout like Cashapp, Apple Pay PayPal, Venmo & Gpay ) HIGH QUALITY CCs 💳 30$ For One Card = balance 600$ Working on any Website, valid with no charge back. DM @BINERO LINKABLES V2 to purchase";
+
+test("scam guard: a stolen-card sales post is deleted and the account banned, even with auto-mod otherwise off", async () => {
+    const r = rig({});
+    let deleted = false;
+    const hit = await r.am.onMessage(msg({ content: SCAM, deleteMessage: async () => { deleted = true; } }));
+    assert.equal(hit, "scam"); assert.ok(deleted);
+    const ban = r.calls.find(c => c.t === "ban"); assert.ok(ban, "the account is banned"); assert.equal(ban.id, U1);
+});
+
+test("scam guard: ordinary chat, staff and servers that turned it off are left alone", async () => {
+    const r = rig({});
+    for (const content of ["I paid with my credit card on Steam, the sale price was great", "dm me your steam id for game night", "anyone know if a visa gift card works on GOG?"]) assert.equal(await r.am.onMessage(msg({ content })), null, content);
+    assert.equal(await r.am.onMessage(msg({ content: SCAM, staff: true })), null, "staff are never touched");
+    r.am.save("G", { scam: { on: false } });
+    assert.equal(await r.am.onMessage(msg({ content: SCAM })), null);
+    assert.equal(r.calls.filter(c => c.t === "ban").length, 0);
+});
+
+test("scam guard: the server can pick delete-only or kick", async () => {
+    const r = rig({ scam: { action: "delete" } });
+    assert.equal(await r.am.onMessage(msg({ content: SCAM })), "scam"); assert.equal(r.calls.filter(c => c.t === "ban" || c.t === "kick").length, 0);
+    r.am.save("G", { scam: { action: "kick" } });
+    await r.am.onMessage(msg({ content: SCAM })); assert.ok(r.calls.some(c => c.t === "kick"));
+    assert.equal(cleanAutomod({ scam: { action: "nuke" } }).scam.action, "ban");
+});
