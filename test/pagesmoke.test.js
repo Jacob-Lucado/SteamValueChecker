@@ -140,11 +140,14 @@ test("the moderation page shows the auto-moderator and saves a change", { timeou
         const saved = await o.request("/api/mod/automod?guild=g-admin");
         assert.equal(saved.status, 200, toastText);
         assert.equal(saved.data.settings.on, true); assert.equal(saved.data.settings.rules.spam.on, true);
-        assert.equal(saved.data.settings.scam.on, true, "the scam guard is on by default");
+        assert.equal(saved.data.settings.scam.on, true, "the scam guard is on by default"); assert.equal(saved.data.settings.phish.on, true);
+        for (const name of ["Same message in several channels", "@everyone and @here", "Too many emoji", "Wall of lines", "Risky file types", "Links from brand-new members"]) await page.locator("label.check", { hasText: name }).first().waitFor({ timeout: 5000 });
+        await page.locator("label.check", { hasText: "Wall of lines" }).locator("input").evaluate(el => { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); });
         await page.locator("label.check", { hasText: "Scam guard on" }).locator("input").evaluate(el => { el.checked = false; el.dispatchEvent(new Event("change", { bubbles: true })); });
         await page.getByRole("button", { name: "Save auto-moderator" }).evaluate(el => el.click());
         await page.waitForTimeout(1500);
         assert.equal((await o.request("/api/mod/automod?guild=g-admin")).data.settings.scam.on, false, "and the toggle saves");
+        assert.equal((await o.request("/api/mod/automod?guild=g-admin")).data.settings.rules.lines.on, true);
         const options = await page.locator("select").first().locator("option").allTextContents();
         for (const want of ["Add a staff note", "Slowmode", "Lock a channel", "Unlock a channel"]) assert.ok(options.includes(want), `action list has ${want}`);
         assert.deepEqual(errors, []);

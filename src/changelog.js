@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.106", date: "2026-11-23", title: "A much bigger auto-moderator", items: [
+        "Fake link guard: look-alike Steam and Discord addresses (like steamcomunity.com) and \"free Nitro\" pages are removed the same way as scam posts. On by default; honest sites like SteamDB and SteamGifts are never touched.",
+        "Six new rules in the Moderation page: the same message in several channels, @everyone and @here from non-staff, too many emoji, walls of lines, risky file types (.exe, .scr and friends), and links from members who just joined.",
+    ] },
     { version: "2026.11.105", date: "2026-11-23", title: "Scam guard", items: [
         "The bot now spots the posts scam accounts paste into every channel (stolen cards for sale, cash-out and flip schemes, \"DM me to buy\"), deletes them and bans the account along with its last day of messages.",
         "It's on by default and works even if the rest of the auto-moderator is off. Staff are never touched. In the dashboard's Moderation page you can switch it off, or pick delete-only or kick instead of a ban.",

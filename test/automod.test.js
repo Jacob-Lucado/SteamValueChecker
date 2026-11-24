@@ -145,3 +145,28 @@ test("scam guard: the server can pick delete-only or kick", async () => {
     await r.am.onMessage(msg({ content: SCAM })); assert.ok(r.calls.some(c => c.t === "kick"));
     assert.equal(cleanAutomod({ scam: { action: "nuke" } }).scam.action, "ban");
 });
+
+test("fake Steam and Discord links are removed with the scam action, real and honest sites are not", async () => {
+    const r = rig({});
+    assert.equal(await r.am.onMessage(msg({ content: "free skins here https://steamcomunity.com/gift/abc" })), "scam");
+    assert.ok(r.calls.some(c => c.t === "ban"));
+    for (const content of ["see https://store.steampowered.com/app/10 and https://steamdb.info/app/10", "https://discord.gg/abcdef join us", "deal at https://www.fanatical.com/en/bundle/x"]) assert.equal(await r.am.onMessage(msg({ content })), null, content);
+    r.am.save("G", { phish: { on: false } });
+    assert.equal(await r.am.onMessage(msg({ content: "https://steamcomunity.com/gift/abc" })), null);
+});
+
+test("new rules: crosspost, @everyone, emoji, lines, risky files and new-member links", async () => {
+    const r = rig({ on: true, action: { warn: false }, rules: { crosspost: { on: true, channels: 3 }, everyone: { on: true }, emoji: { on: true, max: 5 }, lines: { on: true, max: 6 }, files: { on: true }, newlinks: { on: true, minutes: 10 } } });
+    const ch = n => `90000000000000010${n}`;
+    assert.equal(await r.am.onMessage(msg({ channelId: ch(1), content: "Check out my cool new thing right here" })), null);
+    assert.equal(await r.am.onMessage(msg({ channelId: ch(2), content: "check out my cool new thing right here" })), null);
+    assert.equal(await r.am.onMessage(msg({ channelId: ch(3), content: "Check out my cool new thing right here" })), "crosspost");
+    assert.equal(await r.am.onMessage(msg({ authorId: U2, content: "hey @everyone look" })), "everyone");
+    assert.equal(await r.am.onMessage(msg({ authorId: U2, content: "😀😀😀😀😀😀 wow" })), "emoji");
+    assert.equal(await r.am.onMessage(msg({ authorId: U2, content: "a\nb\nc\nd\ne\nf\ng" })), "lines");
+    assert.equal(await r.am.onMessage(msg({ authorId: U2, content: "run this", attachments: ["Setup.EXE"] })), "files");
+    assert.equal(await r.am.onMessage(msg({ authorId: U2, content: "see https://example.com", joinedAt: 1_000_000 - 2 * 60_000 })), "newlinks");
+    assert.equal(await r.am.onMessage(msg({ authorId: U2, content: "see https://example.com", joinedAt: 1_000_000 - 3 * 86400_000 })), null, "an older member's link is fine");
+    assert.equal(await r.am.onMessage(msg({ authorId: U2, content: "here is a picture", attachments: ["cat.png"] })), null);
+    assert.deepEqual(cleanAutomod({ rules: { files: { on: true, list: ".ZIP\nrar" } } }).rules.files.list, ["zip", "rar"]);
+});

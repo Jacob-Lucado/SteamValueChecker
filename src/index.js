@@ -740,7 +740,8 @@ client.on(Events.MessageCreate, async m => {
             const p = m.member?.permissions;
             const staff = m.guild?.ownerId === m.author.id || Boolean(p?.has?.(["Administrator"]) || p?.has?.(["ManageMessages"]) || p?.has?.(["ModerateMembers"]));
             const hit = await automod.onMessage({ guildId: m.guildId, channelId: m.channelId, messageId: m.id, authorId: m.author.id, content: m.content ?? "", roles: [...(m.member?.roles?.cache?.keys?.() ?? [])], staff,
-                mentionCount: (m.mentions?.users?.size ?? 0) + (m.mentions?.roles?.size ?? 0) + (m.mentions?.everyone ? 1 : 0), deleteMessage: () => m.delete() });
+                mentionCount: (m.mentions?.users?.size ?? 0) + (m.mentions?.roles?.size ?? 0) + (m.mentions?.everyone ? 1 : 0), deleteMessage: () => m.delete(),
+                attachments: [...(m.attachments?.values?.() ?? [])].map(a => a.name ?? ""), joinedAt: m.member?.joinedTimestamp ?? null });
             if (hit) return;
         }
         if (m.content) await chatVote(m);

@@ -3,7 +3,8 @@
 // Settings live in one small JSON value per server, so there is no table to migrate.
 
 import { reportProblem } from "./guildproblems.js";
-import { scamScore } from "./scamfilter.js";
+import { scamScore, normalize } from "./scamfilter.js";
+import { phishLinks } from "./phishlinks.js";
 
 export const RULES = {
     spam: "Message spam",
@@ -11,8 +12,15 @@ export const RULES = {
     invites: "Discord invite links",
     links: "Links",
     words: "Blocked words",
-    caps: "SHOUTING (too many capitals)"
+    caps: "SHOUTING (too many capitals)",
+    crosspost: "The same message in several channels",
+    everyone: "@everyone and @here",
+    emoji: "Too many emoji",
+    lines: "Wall of lines",
+    files: "Risky file types",
+    newlinks: "Links from brand-new members"
 };
+export const RISKY_FILES = ["exe", "scr", "bat", "cmd", "com", "msi", "jar", "vbs", "ps1", "lnk", "hta", "js", "reg", "apk", "dll"];
 export const DEFAULTS = Object.freeze({
     on: false,
     rules: {
@@ -21,10 +29,18 @@ export const DEFAULTS = Object.freeze({
         invites: { on: false },
         links: { on: false, allow: [] },
         words: { on: false, list: [] },
-        caps: { on: false, percent: 70, minLength: 12 }
+        caps: { on: false, percent: 70, minLength: 12 },
+        crosspost: { on: false, channels: 3, seconds: 60 },
+        everyone: { on: false },
+        emoji: { on: false, max: 15 },
+        lines: { on: false, max: 15 },
+        files: { on: false, list: RISKY_FILES },
+        newlinks: { on: false, minutes: 10 }
     },
     // Scam posts (stolen cards for sale, cash-out schemes). This one is on unless a server turns it off, and it works even when the rest of auto-mod is off.
     scam: { on: true, action: "ban" },
+    // Fake Steam and Discord links (look-alike addresses, "free Nitro" pages). Same deal: on unless turned off, same action as the scam guard.
+    phish: { on: true },
     // What happens to a message that breaks a rule: it is deleted, and optionally the person is warned or timed out too.
     action: { warn: true, timeoutMinutes: 0 },
     // After this many active warnings the bot acts on its own (0 = never): "timeout" (for escalateMinutes), "kick" or "ban".
@@ -52,9 +68,16 @@ export function cleanAutomod(raw, base = DEFAULTS) {
             invites: pick("invites", x => ({ on: bool(x.on) })),
             links: pick("links", x => ({ on: bool(x.on), allow: strs(x.allow, 30, 80).map(domain).filter(Boolean) })),
             words: pick("words", x => ({ on: bool(x.on), list: strs(x.list, 100, 40) })),
-            caps: pick("caps", x => ({ on: bool(x.on), percent: int(x.percent, 40, 100, 70), minLength: int(x.minLength, 8, 200, 12) }))
+            caps: pick("caps", x => ({ on: bool(x.on), percent: int(x.percent, 40, 100, 70), minLength: int(x.minLength, 8, 200, 12) })),
+            crosspost: pick("crosspost", x => ({ on: bool(x.on), channels: int(x.channels, 2, 10, 3), seconds: int(x.seconds, 10, 600, 60) })),
+            everyone: pick("everyone", x => ({ on: bool(x.on) })),
+            emoji: pick("emoji", x => ({ on: bool(x.on), max: int(x.max, 3, 100, 15) })),
+            lines: pick("lines", x => ({ on: bool(x.on), max: int(x.max, 4, 100, 15) })),
+            files: pick("files", x => { const l = strs(x.list, 40, 10).map(e => e.replace(/^\./, "").replace(/[^a-z0-9]/g, "")).filter(Boolean); return { on: bool(x.on), list: l.length ? l : RISKY_FILES }; }),
+            newlinks: pick("newlinks", x => ({ on: bool(x.on), minutes: int(x.minutes, 1, 1440, 10) }))
         },
         scam: (() => { const x = { ...DEFAULTS.scam, ...(base.scam ?? {}), ...(r.scam && typeof r.scam === "object" ? r.scam : {}) }; return { on: bool(x.on, true), action: ["ban", "kick", "delete"].includes(x.action) ? x.action : "ban" }; })(),
+        phish: { on: bool(({ ...DEFAULTS.phish, ...(base.phish ?? {}), ...(r.phish && typeof r.phish === "object" ? r.phish : {}) }).on, true) },
         action: { warn: bool(ac.warn), timeoutMinutes: int(ac.timeoutMinutes, 0, 40320, 0) },
         escalate: { warns: int(esc.warns, 0, 20, 0), action: ["timeout", "kick", "ban"].includes(esc.action) ? esc.action : "timeout", minutes: int(esc.minutes, 1, 40320, 60) },
         exemptRoles: ids(r.exemptRoles ?? base.exemptRoles), exemptChannels: ids(r.exemptChannels ?? base.exemptChannels),
@@ -67,11 +90,20 @@ const URL_RE = /\bhttps?:\/\/[^\s<>()]+|\bwww\.[^\s<>()]+/gi;
 const hostOf = u => { try { return new URL(/^https?:/i.test(u) ? u : `https://${u}`).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } };
 
 /** Which rule a message breaks, or null. Pure: spam tracking is passed in as `recent` (timestamps of this person's recent messages). */
-export function breaks(cfg, { content = "", mentionCount = 0, recent = [], now = Date.now() }) {
+export function breaks(cfg, { content = "", mentionCount = 0, recent = [], now = Date.now(), attachments = [], memberAgeMin = null, crossChannels = 1 }) {
     const R = cfg.rules, text = String(content ?? "");
     if (R.spam.on && recent.filter(t => now - t <= R.spam.seconds * 1000).length >= R.spam.count) return "spam";
     if (R.mentions.on && mentionCount > R.mentions.max) return "mentions";
+    if (R.crosspost.on && crossChannels >= R.crosspost.channels) return "crosspost";
+    if (R.everyone.on && /@(?:everyone|here)\b/.test(text)) return "everyone";
     if (R.invites.on && INVITE.test(text)) return "invites";
+    if (R.files.on && attachments.some(n => R.files.list.includes(String(n).toLowerCase().split(".").pop()))) return "files";
+    if (R.newlinks.on && memberAgeMin !== null && memberAgeMin < R.newlinks.minutes && (text.match(URL_RE) ?? []).length) return "newlinks";
+    if (R.emoji.on) {
+        const n = (text.match(/\p{Extended_Pictographic}|<a?:\w+:\d+>/gu) ?? []).length;
+        if (n > R.emoji.max) return "emoji";
+    }
+    if (R.lines.on && text.split("\n").length > R.lines.max) return "lines";
     if (R.links.on) {
         const found = (text.match(URL_RE) ?? []).map(hostOf).filter(Boolean);
         if (found.some(h => !R.links.allow.some(a => h === a || h.endsWith("." + a)))) return "links";
@@ -90,6 +122,7 @@ export function breaks(cfg, { content = "", mentionCount = 0, recent = [], now =
 export function createAutomod({ db, api, mod, botId = () => null, now = () => Date.now(), log = () => {} }) {
     const KEY = gid => `automod:${gid}`;
     const cache = new Map(); // guildId -> { at, cfg }
+    const posted = new Map(); // `${guildId}:${userId}` -> recent messages, to spot one text sent to many channels
     const recent = new Map(); // `${guildId}:${userId}` -> timestamps
     const joins = new Map(); // guildId -> { times: [], until }
 
@@ -110,16 +143,26 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     const exempt = (cfg, { channelId, roles = [], staff }) => staff || cfg.exemptChannels.includes(channelId) || roles.some(r => cfg.exemptRoles.includes(r));
 
     /** Looks at one message. Returns the rule it broke (after dealing with it), or null. Never throws. */
-    async function onMessage({ guildId, channelId, messageId, authorId, content, mentionCount = 0, roles = [], staff = false, deleteMessage }) {
+    async function onMessage({ guildId, channelId, messageId, authorId, content, mentionCount = 0, roles = [], staff = false, deleteMessage, attachments = [], joinedAt = null }) {
         try {
             const cfg = get(guildId);
             if (authorId === botId() || exempt(cfg, { channelId, roles, staff })) return null;
             if (cfg.scam.on && scamScore(content).scam) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage });
+            if (cfg.phish.on && phishLinks(content).length) return await dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, what: "A fake Steam or Discord link" });
             if (!cfg.on) return null;
             const k = `${guildId}:${authorId}`, t = now();
             const list = (recent.get(k) ?? []).filter(x => t - x < 60_000); list.push(t); recent.set(k, list);
             if (recent.size > 5000) for (const [key, v] of recent) if (!v.length || t - v.at(-1) > 60_000) recent.delete(key);
-            const rule = breaks(cfg, { content, mentionCount, recent: list, now: t });
+            let crossChannels = 1;
+            if (cfg.rules.crosspost.on) {
+                const key = normalize(content).slice(0, 200);
+                if (key.length >= 12) {
+                    const seen = (posted.get(k) ?? []).filter(x => t - x.t < cfg.rules.crosspost.seconds * 1000); seen.push({ t, key, channelId }); posted.set(k, seen);
+                    crossChannels = new Set(seen.filter(x => x.key === key).map(x => x.channelId)).size;
+                    if (posted.size > 5000) for (const [kk, v] of posted) if (!v.length || t - v.at(-1).t > 600_000) posted.delete(kk);
+                }
+            }
+            const rule = breaks(cfg, { content, mentionCount, recent: list, now: t, attachments, crossChannels, memberAgeMin: joinedAt ? (t - joinedAt) / 60_000 : null });
             if (!rule) return null;
             await Promise.resolve(deleteMessage?.()).catch(() => {});
             if (rule === "spam") recent.set(k, []); // one action per burst, not one per message
@@ -138,9 +181,9 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     }
 
     /** A scam post: the message goes, and so does the account (with its last day of messages), unless the server picked a gentler action. */
-    async function dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage }) {
+    async function dealWithScam({ cfg, guildId, channelId, authorId, deleteMessage, what = "Scam message (stolen cards or a cash-out scheme)" }) {
         await Promise.resolve(deleteMessage?.()).catch(() => {});
-        const act = cfg.scam.action, why = `Scam message (stolen cards or a cash-out scheme) in <#${channelId}>`;
+        const act = cfg.scam.action, why = `${what} in <#${channelId}>`;
         if (act !== "delete") {
             await mod.auto({ guildId, userId: authorId, action: act, reason: why, deleteSeconds: act === "ban" ? 86400 : 0, dmVerb: false })
                 .catch(e => { log(`automod scam: ${e.message}`); reportProblem(db, guildId, "automod", `${act} someone who posted a scam message (I need the ${act === "ban" ? "Ban" : "Kick"} Members permission)`, e); });
