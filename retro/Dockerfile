@@ -71,7 +71,7 @@ COPY furni/ furni/
 RUN mkdir -p furni-sql hotel-files/c_images/hof_furni/icons \
     && for pack in furni/*/; do \
          slug=$(basename "$pack"); \
-         for bundle in "$pack"bundles/*.nitro; do cp "$bundle" "hotel-files/assets/furniture/$(basename "$bundle" .nitro).hab"; done; \
+         for bundle in "$pack"bundles/*.nitro; do [ -e "$bundle" ] || continue; cp "$bundle" "hotel-files/assets/furniture/$(basename "$bundle" .nitro).hab"; done; \
          cp "$pack"icons/*.png hotel-files/c_images/hof_furni/icons/ 2> /dev/null || true; \
          cp "$pack"furniture.sql "furni-sql/$slug.sql"; \
        done

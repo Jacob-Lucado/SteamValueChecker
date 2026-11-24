@@ -1,0 +1,1 @@
+-- Icons only: furni whose official art had no shop icon.

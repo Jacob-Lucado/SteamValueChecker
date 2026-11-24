@@ -369,12 +369,23 @@ WHERE offer.enabled = 1 AND (
     SUBSTRING_INDEX(furni.item_name, '*', 1) IN ('ads_clwall3', 'h25_monkeybzn_pole', 'nft_china_light', 'soft_jaggara_norja')
     OR (furni.has_furnidata = 0 AND NOT EXISTS (
         SELECT 1 FROM furniture AS listed WHERE listed.has_furnidata = 1 AND listed.type = furni.type AND listed.sprite_id = furni.sprite_id)));
+
+-- A furni whose name ends in a line break or a space has a clean twin, so its offer is a duplicate.
+UPDATE catalog_offers AS offer
+JOIN catalog_offer_products AS product ON product.offer_id = offer.id
+JOIN furniture AS furni ON furni.id = product.furniture_id
+SET offer.enabled = 0
+WHERE offer.enabled = 1
+  AND furni.item_name REGEXP '[[:space:]]$'
+  AND EXISTS (SELECT 1 FROM furniture AS twin
+              WHERE twin.id <> furni.id AND twin.item_name = TRIM(TRAILING CHAR(13, 10, 32) FROM furni.item_name));
 EOF
 
 # Extra furni packs: the furni, their catalog page and offers. Rows that already exist are left alone.
 for pack in /etc/hotel/furni/*.sql; do
     if [ -f "$pack" ]; then sql plus < "$pack"; fi
 done
+sql plus < /etc/hotel/community-categories.sql
 
 php artisan storage:link --force > /dev/null 2>&1 || true
 # The website caches its settings, so clear that after changing them above.
