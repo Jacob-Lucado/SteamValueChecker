@@ -242,3 +242,11 @@ test("a message from an account named like a scam service is removed, a plain na
     assert.equal(await r.am.onMessage(msg({ content: "hey everyone, anyone around?", authorName: "Jacob" })), null);
     assert.equal(r.calls.length, 0);
 });
+
+test("the guard keeps the last few catches with a short excerpt, newest first, capped at ten", async () => {
+    const r = rig({});
+    for (let i = 0; i < 12; i++) await r.am.onMessage(msg({ content: `@everyone #${i} ` + SCAM, authorId: `90000000000000${100 + i}` }));
+    const c = r.am.caught("G"); assert.equal(c.n, 12); assert.equal(c.recent.length, 10);
+    assert.match(c.recent[0].text, /#11/); assert.ok(!c.recent[0].text.includes("@everyone"), "mentions are defused"); assert.equal(c.recent[0].action, "ban");
+    assert.ok(c.recent[0].text.length <= 300);
+});

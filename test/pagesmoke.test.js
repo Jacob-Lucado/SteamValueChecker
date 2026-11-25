@@ -144,6 +144,11 @@ test("the moderation page shows the auto-moderator and saves a change", { timeou
         await page.getByRole("button", { name: "Try it", exact: true }).evaluate(el => el.click());
         await page.getByText(/Would be caught by: Scam guard/).waitFor({ timeout: 10_000 });
         await page.getByText("Hasn't had to stop anything here yet.").first().waitFor({ timeout: 5000 });
+        o.db.setMeta("scamcaught:g-admin", JSON.stringify({ n: 1, at: Date.now(), recent: [{ at: Date.now(), user: "900000000000000031", channel: "1", what: "Scam message", action: "ban", text: "selling fullz dm me" }] }));
+        await page.reload({ waitUntil: "load" });
+        await page.getByText("Last 1 caught").first().waitFor({ timeout: 15_000 });
+        await page.getByText("Last 1 caught").first().evaluate(el => el.click());
+        await page.getByText("selling fullz dm me").first().waitFor({ timeout: 5000 });
         assert.equal(saved.data.settings.scam.on, true, "the scam guard is on by default"); assert.equal(saved.data.settings.phish.on, true);
         for (const name of ["Same message in several channels", "@everyone and @here", "Too many emoji", "Wall of lines", "Risky file types", "Links from brand-new members"]) await page.locator("label.check", { hasText: name }).first().waitFor({ timeout: 5000 });
         await page.locator("label.check", { hasText: "Wall of lines" }).locator("input").evaluate(el => { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); });

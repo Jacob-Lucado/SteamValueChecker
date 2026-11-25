@@ -187,8 +187,9 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     const knownScammer = id => { try { return Boolean(db.getMeta(SCAMMER(id))); } catch { return false; } };
     const markScammer = id => { try { const cur = JSON.parse(db.getMeta(SCAMMER(id)) ?? "null") ?? { n: 0 }; db.setMeta(SCAMMER(id), JSON.stringify({ at: now(), n: (cur.n ?? 0) + 1 })); } catch { /* the list is a bonus */ } };
     // How many scam posts the guard has stopped in each server, for the Moderation page.
-    const countCaught = g => { try { const cur = caught(g); db.setMeta(`scamcaught:${g}`, JSON.stringify({ n: cur.n + 1, at: now() })); } catch { /* just a counter */ } };
-    const caught = g => { try { const v = JSON.parse(db.getMeta(`scamcaught:${g}`) ?? "null"); return { n: Number(v?.n) || 0, at: Number(v?.at) || 0 }; } catch { return { n: 0, at: 0 }; } };
+    // It also keeps the last few catches (with a short excerpt) so owners can look back over them without digging through the mod log.
+    const countCaught = (g, e = null) => { try { const cur = caught(g); db.setMeta(`scamcaught:${g}`, JSON.stringify({ n: cur.n + 1, at: now(), recent: e ? [{ at: now(), user: String(e.authorId), channel: String(e.channelId), what: String(e.what ?? "").slice(0, 120), action: e.act, text: String(e.text ?? "").replace(/@(everyone|here)/gi, "@\u200b$1").slice(0, 300) }, ...cur.recent].slice(0, 10) : cur.recent })); } catch { /* just a counter */ } };
+    const caught = g => { try { const v = JSON.parse(db.getMeta(`scamcaught:${g}`) ?? "null"); return { n: Number(v?.n) || 0, at: Number(v?.at) || 0, recent: Array.isArray(v?.recent) ? v.recent : [] }; } catch { return { n: 0, at: 0, recent: [] }; } };
     /** Dry run for the dashboard's "try a message" box: what the guards would do with this text. Changes nothing. */
     function test(guildId, content) {
         const cfg = get(guildId), sc = scamScore(content), ph = phishLinks(content);
@@ -205,7 +206,7 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
             await mod.auto({ guildId, userId: authorId, action: act, reason: why, deleteSeconds: act === "ban" ? 86400 : 0, dmVerb: false })
                 .catch(e => { log(`automod scam: ${e.message}`); reportProblem(db, guildId, "automod", `${act} someone who posted a scam message (I need the ${act === "ban" ? "Ban" : "Kick"} Members permission)`, e); });
         }
-        db.bumpUsage("automod_scam"); markScammer(authorId); countCaught(guildId);
+        db.bumpUsage("automod_scam"); markScammer(authorId); countCaught(guildId, { authorId, channelId, what, act, text: content });
         // Show staff what was removed, so a wrong call is easy to spot and undo.
         const ch = mod.logChannel?.(guildId);
         if (ch && api?.sendMessage) {

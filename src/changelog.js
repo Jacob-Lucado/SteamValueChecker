@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.116", date: "2026-11-25", title: "See what the scam guard caught", items: [
+        "The Moderation page now lists the last ten things the scam guard and fake link guard stopped in your server, with when, which account, what was done and a short excerpt, so you can spot a wrong call without digging through the mod log.",
+    ] },
     { version: "2026.11.115", date: "2026-11-24", title: "Check on your appeal", items: [
         "The appeal page now has a Check box: enter your Discord user ID to see whether your Steam Value Checker appeal is waiting, accepted or denied. Only the status is shown.",
     ] },

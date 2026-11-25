@@ -2120,3 +2120,4 @@ a.fd-name:hover { text-decoration: underline; }
 /* Host stats strip on the Giveaways page */
 .stat { flex: 1 1 110px; min-width: 96px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); text-align: center; }
 .stat-n { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.code-excerpt{margin:.25rem 0 .6rem;padding:.4rem .6rem;border-radius:6px;background:rgba(127,127,127,.12);font-family:ui-monospace,Consolas,monospace;font-size:.8rem;white-space:pre-wrap;word-break:break-word}
