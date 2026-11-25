@@ -2148,6 +2148,10 @@ test("game bundles: members see the list, managers set up their server, the owne
     assert.equal(list.bundles.length, 2); assert.equal(list.stores.length, 4); assert.ok(list.bundles.every(b => b.storeName && b.url));
     assert.equal((await o.request("/api/bundlefeed?store=steam")).data.bundles.length, 1);
     assert.equal((await o.request("/api/bundlefeed?store=nope")).status, 400);
+    assert.ok(list.bundles.every(b => Array.isArray(b.wishlist) && !b.wishlist.length), "nothing is marked until the wishlist has one of the games");
+    o.db.addItems("u1", [{ itad_id: "wa", title: "Hades" }]);
+    o.db.upsertFeedBundle(mk(1, "humble", { games: ["Hades", "Other"] }));
+    assert.deepEqual((await o.request("/api/bundlefeed")).data.bundles.find(b => b.title === "Bundle 1").wishlist, ["Hades"], "a game on the member's wishlist is marked");
     const s = (await o.request("/api/servers/bundles?guild=g-admin")).data;
     assert.equal(s.channels.length, 2); assert.equal(s.latest.length, 2);
     assert.equal((await o.request("/api/servers/bundles?guild=g-member")).status, 403);

@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.118", date: "2026-11-25", title: "Bundle match", items: [
+        "When a new bundle shows up with a game from your wishlist in it, you get a message about it: which of your games are inside, the price, when it ends and a button to the store. You only hear about bundles that have something you want, once each, and never more than three a day.",
+        "The Bundles page marks those bundles with a star and the games they share with your wishlist, and has an On my wishlist filter.",
+        "They arrive with your other bundle alerts, so muting those mutes these too.",
+    ] },
     { version: "2026.11.117", date: "2026-11-25", title: "Undo a scam guard call", items: [
         "Each entry in the Moderation page's last-caught list has a Wrong call button. It lifts the ban (or just forgives a kick) and makes sure the guard doesn't remove that person again when they rejoin your server. Other servers still treat the account as known.",
     ] },

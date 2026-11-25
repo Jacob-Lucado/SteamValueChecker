@@ -864,3 +864,30 @@ test("the public appeal page works signed out and lands in the Admin panel, wher
         assert.equal(o.db.listAppeals("site", "accepted").length, 1);
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the Bundles page stars bundles with a wishlist game and filters to them", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        o.db.addItems("u1", [{ itad_id: "h", title: "Hades" }]);
+        const mk = (n, games) => ({ key: `humble:b${n}`, store: "humble", title: "Bundle " + n, url: `https://example.com/b${n}`, image: null, games, gameCount: games.length, price: "$5", expiresAt: null, seenAt: Date.now() });
+        o.db.upsertFeedBundle(mk(1, ["Hades", "Hollow Knight"])); o.db.upsertFeedBundle(mk(2, ["Celeste", "Tunic"]));
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/bundles`, { waitUntil: "load" });
+        await page.getByText("Bundle 2").first().waitFor({ timeout: 20_000 });
+        assert.equal(await page.getByText("★ On your wishlist: Hades").count(), 1, "only the bundle with Hades is starred");
+        assert.equal(await page.locator("a[href='/b/1/go']").count() > 0, true, "the open button goes through the site's own redirect");
+        await page.getByRole("button", { name: "On my wishlist (1)" }).evaluate(el => el.click());
+        await page.waitForTimeout(300);
+        assert.equal(await page.getByText("Bundle 2").count(), 0, "the other bundle drops out");
+        assert.equal(await page.getByText("Bundle 1").count() > 0, true);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});

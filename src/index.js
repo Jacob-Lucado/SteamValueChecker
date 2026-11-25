@@ -130,6 +130,7 @@ import { runCodes } from "./codes.js";
 import { createFeedHealth } from "./feedhealth.js";
 import { clientInspector, runChannelAudit } from "./channelcheck.js";
 import { runBundleFeed } from "./bundlefeed.js";
+import { runBundleMatch } from "./bundlematch.js";
 import { createXPoster } from "./xposter.js";
 import { createLogFeed } from "./logfeed.js";
 import { createIndie } from "./indie.js";
@@ -388,7 +389,9 @@ let bundlesBusy = false;
 const pollBundles = async ({ deep = false } = {}) => {
     if (bundlesBusy) return null;
     bundlesBusy = true;
-    try { const r = await runBundleFeed({ db, api: botRest, deep, health: feedHealth, log: m => console.log(`[bundles] ${m}`) }); beat.bundles = Date.now(); beat.bundleError = r?.feedError ?? null; return r; } finally { bundlesBusy = false; }
+    try { const r = await runBundleFeed({ db, api: botRest, deep, health: feedHealth, log: m => console.log(`[bundles] ${m}`) }); beat.bundles = Date.now(); beat.bundleError = r?.feedError ?? null;
+        try { const m = await runBundleMatch({ db, notifier, log: x => console.warn(`[bundle match] ${x}`) }); if (m.sent) console.log(`[bundle match] told ${m.sent} member${m.sent === 1 ? "" : "s"}`); } catch (e) { console.warn(`[bundle match] ${e.message}`); }
+        return r; } finally { bundlesBusy = false; }
 };
 const bundleUi = createBundleFeedHandlers({ db, runNow: pollBundles });
 let dropsBusy = false;

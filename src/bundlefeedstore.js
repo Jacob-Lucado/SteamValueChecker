@@ -2,6 +2,14 @@
 import { BUNDLE_STORE_KEYS } from "./bundlefeedsource.js";
 
 export const bundleFeedSchema = `
+CREATE TABLE IF NOT EXISTS bundle_matches (
+    bundle_id   INTEGER NOT NULL,
+    discord_id  TEXT NOT NULL,
+    titles      TEXT,
+    notified_at INTEGER NOT NULL,
+    PRIMARY KEY (bundle_id, discord_id)
+);
+CREATE INDEX IF NOT EXISTS bundle_matches_user ON bundle_matches(discord_id, notified_at);
 CREATE TABLE IF NOT EXISTS feed_bundles (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     key        TEXT NOT NULL UNIQUE,
@@ -107,6 +115,13 @@ export function bundleFeedStore({ run, get, all, clean, now }) {
     const bundleFeedGuilds = () => all("SELECT guild_id FROM feed_bundle_guilds WHERE channel_id IS NOT NULL").map(r => getBundleFeedSettings(r.guild_id));
     const bundleFeedCounts = () => ({ active: Number(get("SELECT COUNT(*) AS n FROM feed_bundles WHERE status = 'active'").n), total: Number(get("SELECT COUNT(*) AS n FROM feed_bundles").n), servers: Number(get("SELECT COUNT(*) AS n FROM feed_bundle_guilds WHERE channel_id IS NOT NULL").n) });
 
-    return { upsertFeedBundle, getFeedBundle, listFeedBundles, expireDueBundles, expireMissingBundles, setFeedBundleStatus, pruneFeedBundles, feedBundlePost, addFeedBundlePost, hasAnyFeedBundlePost,
+    // Bundle Match: which wishlists have games in a bundle, and who has already been told.
+    const wishlistTitleRows = () => all("SELECT discord_id, itad_id, title FROM items").map(clean);
+    const userWishlistRows = id => all("SELECT itad_id, title FROM items WHERE discord_id = ?", id).map(clean);
+    const hasBundleMatch = (bundleId, id) => Boolean(get("SELECT 1 AS x FROM bundle_matches WHERE bundle_id = ? AND discord_id = ?", bundleId, id));
+    const addBundleMatch = (bundleId, id, titles) => run("INSERT OR IGNORE INTO bundle_matches (bundle_id, discord_id, titles, notified_at) VALUES (?,?,?,?)", bundleId, id, JSON.stringify(titles ?? []), now());
+    const countBundleMatchesSince = (id, since) => Number(get("SELECT COUNT(*) AS n FROM bundle_matches WHERE discord_id = ? AND notified_at >= ?", id, since)?.n ?? 0);
+    const pruneBundleMatches = (before) => run("DELETE FROM bundle_matches WHERE notified_at < ?", before);
+    return { wishlistTitleRows, userWishlistRows, hasBundleMatch, addBundleMatch, countBundleMatchesSince, pruneBundleMatches, upsertFeedBundle, getFeedBundle, listFeedBundles, expireDueBundles, expireMissingBundles, setFeedBundleStatus, pruneFeedBundles, feedBundlePost, addFeedBundlePost, hasAnyFeedBundlePost,
         markFeedBundlePostExpired, staleFeedBundlePosts, getBundleFeedSettings, setBundleFeedSettings, bundleFeedGuilds, bundleFeedCounts };
 }

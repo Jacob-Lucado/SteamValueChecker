@@ -5,6 +5,7 @@ import { EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { HttpError } from "./http.js";
 import { bundleLookup } from "../bundle.js";
 import { bundleFeedView } from "../bundlefeed.js";
+import { matchesForUser } from "../bundlematch.js";
 import { codeFamilies, codeGames, codeView } from "../codes.js";
 import { dropView } from "../drops.js";
 import { expandGames } from "../codesource.js";
@@ -28,12 +29,13 @@ export function createRedeemRoutes(ctx) {
             return { games: codeGames(), families: codeFamilies(), status, codes: db.listCodes({ status, game: wanted, limit: 100 }).map(c => codeView(c, at)), counts: db.codeCounts() };
         },
         "GET /api/bundlefeed": async (req, _b, url) => {
-            session(req);
-            const store = url.searchParams.get("store") || null;
+            const s = session(req), store = url.searchParams.get("store") || null;
             if (store && !BUNDLE_STORES[store]) throw new HttpError(400, "Unknown store.");
             const status = url.searchParams.get("status") === "expired" ? "expired" : "active";
             db.expireDueBundles(now()); // anything that ended since the last poll should not show as live
-            return { status, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), bundles: db.listFeedBundles({ status, stores: store ? [store] : null, limit: 100 }).map(bundleFeedView), counts: db.bundleFeedCounts() };
+            const found = db.listFeedBundles({ status, stores: store ? [store] : null, limit: 100 });
+            const mine = matchesForUser(db, s.userId, found); // which bundles hold games from this member's own wishlist
+            return { status, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), bundles: found.map(b => ({ ...bundleFeedView(b), wishlist: mine[b.id] ?? [] })), counts: db.bundleFeedCounts() };
         },
         "POST /api/codes/retire": async (req, body) => {
             const s = session(req);
