@@ -34,6 +34,10 @@ export function createModRoutes(ctx) {
             const s = session(req); const g = modGuild(s, String(body.guild_id), "manageGuild"); botIn(g);
             return modr(() => md.automodSave(g.id, body.settings));
         },
+        "POST /api/mod/scam/forgive": async (req, body) => {
+            const s = session(req); const g = modGuild(s, String(body.guild_id), MOD_ACTION_PERM.unban); botIn(g);
+            return modr(() => md.scamForgive(g.id, s.userId, String(body.user_id ?? "")));
+        },
         "POST /api/mod/automod/test": async (req, body) => {
             const s = session(req); const g = modGuild(s, String(body.guild_id), "moderate"); botIn(g);
             return modr(() => md.automodTest(g.id, body.text));

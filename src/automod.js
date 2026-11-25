@@ -190,6 +190,13 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
     // It also keeps the last few catches (with a short excerpt) so owners can look back over them without digging through the mod log.
     const countCaught = (g, e = null) => { try { const cur = caught(g); db.setMeta(`scamcaught:${g}`, JSON.stringify({ n: cur.n + 1, at: now(), recent: e ? [{ at: now(), user: String(e.authorId), channel: String(e.channelId), what: String(e.what ?? "").slice(0, 120), action: e.act, text: String(e.text ?? "").replace(/@(everyone|here)/gi, "@\u200b$1").slice(0, 300) }, ...cur.recent].slice(0, 10) : cur.recent })); } catch { /* just a counter */ } };
     const caught = g => { try { const v = JSON.parse(db.getMeta(`scamcaught:${g}`) ?? "null"); return { n: Number(v?.n) || 0, at: Number(v?.at) || 0, recent: Array.isArray(v?.recent) ? v.recent : [] }; } catch { return { n: 0, at: 0, recent: [] }; } };
+    // A server that reverses a call keeps that person from being removed again on rejoin, here only. Other servers still treat them as known.
+    const forgiven = (g, u) => { try { return Boolean(db.getMeta(`scamallow:${g}:${u}`)); } catch { return false; } };
+    /** The server undid a scam guard call: remember it, and drop it from the "last caught" list. */
+    function forgive(guildId, userId) {
+        db.setMeta(`scamallow:${guildId}:${userId}`, "1");
+        try { const v = JSON.parse(db.getMeta(`scamcaught:${guildId}`) ?? "null"); if (v?.recent) { v.recent = v.recent.filter(c => c.user !== String(userId)); db.setMeta(`scamcaught:${guildId}`, JSON.stringify(v)); } } catch { /* counter only */ }
+    }
     /** Dry run for the dashboard's "try a message" box: what the guards would do with this text. Changes nothing. */
     function test(guildId, content) {
         const cfg = get(guildId), sc = scamScore(content), ph = phishLinks(content);
@@ -226,7 +233,7 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
         try {
             const cfg = get(guildId);
             if (bot || userId === botId()) return null;
-            if (cfg.scam.on && cfg.scam.action !== "delete" && knownScammer(userId)) {
+            if (cfg.scam.on && cfg.scam.action !== "delete" && knownScammer(userId) && !forgiven(guildId, userId)) {
                 await mod.auto({ guildId, userId, action: cfg.scam.action, reason: "Known scam account (caught posting scams in another server)", dmVerb: false })
                     .catch(e => { log(`scam join: ${e.message}`); reportProblem(db, guildId, "automod", `${cfg.scam.action} a known scam account as it joined`, e); });
                 db.bumpUsage("automod_scammer_join");
@@ -247,5 +254,5 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
             return raiding ? "raid" : "young";
         } catch (e) { log(`raid guard: ${e.message}`); return null; }
     }
-    return { get, save, onMessage, onJoin, test, caught, rules: RULES };
+    return { get, save, onMessage, onJoin, test, caught, forgive, rules: RULES };
 }

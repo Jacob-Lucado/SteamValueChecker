@@ -61,6 +61,14 @@ export function createModDash({ db, rest, mod, automod = null }) {
         db.bumpUsage("dash_automod");
         return { settings: automod.save(gid, settings) };
     }
+    /** Undo a scam guard ban: lift it, and make sure the guard doesn't just remove them again when they rejoin this server. */
+    async function scamForgive(gid, actorId, userId) {
+        if (!automod?.forgive) fail(503, "The auto-moderator is not available right now.");
+        try { await mod.unban({ guildId: gid, actorId, userId, reason: "Scam guard call reversed from the Moderation page" }); }
+        catch (e) { if (!/not banned/i.test(String(e?.message))) throw e; }
+        automod.forgive(gid, String(userId));
+        return { ok: true };
+    }
     function automodTest(gid, text) {
         if (!automod?.test) fail(503, "The auto-moderator is not available right now.");
         const t = String(text ?? "").slice(0, 2000);
@@ -86,5 +94,5 @@ export function createModDash({ db, rest, mod, automod = null }) {
         return { warnDays: db.getCommunity(gid).warn_days ?? 0, appealsOn: Boolean(db.getCommunity(gid).appeals_on) };
     }
     const submitAppeal = (gid, userId, text) => wrap(async () => mod.appeal({ guildId: gid, userId, text }));
-    return { stats, appeals, decideAppeal, saveSettings, submitAppeal, overview, cases, act, clearWarns, setLog, automodGet, automodTest, automodSave };
+    return { stats, appeals, decideAppeal, saveSettings, submitAppeal, overview, cases, act, clearWarns, setLog, automodGet, automodTest, scamForgive, automodSave };
 }

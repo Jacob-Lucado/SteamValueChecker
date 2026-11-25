@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.117", date: "2026-11-25", title: "Undo a scam guard call", items: [
+        "Each entry in the Moderation page's last-caught list has a Wrong call button. It lifts the ban (or just forgives a kick) and makes sure the guard doesn't remove that person again when they rejoin your server. Other servers still treat the account as known.",
+    ] },
     { version: "2026.11.116", date: "2026-11-25", title: "See what the scam guard caught", items: [
         "The Moderation page now lists the last ten things the scam guard and fake link guard stopped in your server, with when, which account, what was done and a short excerpt, so you can spot a wrong call without digging through the mod log.",
     ] },

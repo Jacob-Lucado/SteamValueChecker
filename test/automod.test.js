@@ -250,3 +250,14 @@ test("the guard keeps the last few catches with a short excerpt, newest first, c
     assert.match(c.recent[0].text, /#11/); assert.ok(!c.recent[0].text.includes("@everyone"), "mentions are defused"); assert.equal(c.recent[0].action, "ban");
     assert.ok(c.recent[0].text.length <= 300);
 });
+
+test("reversing a catch keeps that person from being removed again on rejoin in that server only", async () => {
+    const r = rig({});
+    await r.am.onMessage(msg({ content: SCAM, authorId: U2 }));
+    assert.equal(r.am.caught("G").recent.length, 1);
+    r.am.forgive("G", U2);
+    assert.equal(r.am.caught("G").recent.length, 0, "gone from the list");
+    r.calls.length = 0;
+    assert.notEqual(await r.am.onJoin({ guildId: "G", userId: U2 }), "scammer", "this server said it was a mistake");
+    assert.equal(await r.am.onJoin({ guildId: "H", userId: U2 }), "scammer", "other servers still know the account");
+});
