@@ -921,7 +921,18 @@ window.SVC_SITE = envIn => {
       form.hidden = true; done.hidden = false;
       done.querySelector("#appeal-done").textContent = kind === "server" ? "The server's moderators will see it on their Moderation page. If their bot can message you, the answer comes by Discord direct message." : "It's in the owner's queue. If the bot can message you the answer comes by Discord direct message, so keep your DMs open for server members.";
     }));
-    app.replaceChildren(pageHead("Ban appeal", "Banned from Steam Value Checker or a Discord server that takes appeals? Tell us why it should be lifted. You don't need to sign in."), form, done);
+    const chkId = h("input", { type: "text", inputmode: "numeric", maxlength: "25", placeholder: "Your Discord user ID", value: state.me?.id || "" });
+    const chkOut = h("p", { class: "muted", id: "appeal-status" });
+    const chkBtn = h("button", { class: "btn gray small", type: "button", text: "Check" });
+    chkBtn.addEventListener("click", () => busy(chkBtn, async () => {
+      const r = await api("/api/public/appeal/status?user_id=" + encodeURIComponent(chkId.value.trim()));
+      chkOut.textContent = !r.found ? "No Steam Value Checker appeal found for that ID."
+        : r.status === "open" ? `Your appeal from ${new Date(r.sent).toLocaleDateString()} is waiting for an answer.`
+        : r.status === "accepted" ? (r.stillRestricted ? "Your appeal was accepted, but the account is restricted again." : "Your appeal was accepted. You can use Steam Value Checker again.")
+        : "Your appeal was denied. You can send a new one.";
+    }));
+    const checkBox = h("div", { class: "panel" }, h("p", { class: "muted small", text: "Already sent a Steam Value Checker appeal?" }), h("div", { class: "row" }, chkId, chkBtn), chkOut);
+    app.replaceChildren(pageHead("Ban appeal", "Banned from Steam Value Checker or a Discord server that takes appeals? Tell us why it should be lifted. You don't need to sign in."), form, done, checkBox);
   }
   async function toolsView() { return (await lazy("ToolsUI")).view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
   async function clubView() { return (await lazy("ClubUI")).view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }

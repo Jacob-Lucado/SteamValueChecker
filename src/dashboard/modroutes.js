@@ -66,6 +66,10 @@ export function createModRoutes(ctx) {
             }
             return { ...siteAppeals.submit({ userId, text: body.text, contact: body.contact, verified: false }) };
         },
+        "GET /api/public/appeal/status": async (req, _b, url) => {
+            if (!appealLimit.hit(clientIp(req)).ok) throw new HttpError(429, "That's a lot of checks from one place. Try again in an hour.");
+            return siteAppeals.status(url.searchParams.get("user_id"));
+        },
         "GET /api/admin/appeals": async (req, _b, url) => {
             const s = session(req); if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
             const status = ["open", "accepted", "denied"].includes(url.searchParams.get("status")) ? url.searchParams.get("status") : "open";

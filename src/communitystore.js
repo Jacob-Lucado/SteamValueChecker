@@ -278,6 +278,7 @@ export function communityStore({ run, get, all, clean, now }) {
     const addAppeal = (guildId, userId, text, now, { contact = "", verified = 1 } = {}) => { run("INSERT INTO ban_appeals (guild_id, user_id, text, created_at, contact, verified) VALUES (?,?,?,?,?,?)", guildId, userId, text, now, contact, verified); return get("SELECT * FROM ban_appeals WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1", guildId, userId); };
     const openAppeal = (guildId, userId) => clean(get("SELECT * FROM ban_appeals WHERE guild_id = ? AND user_id = ? AND status = 'open'", guildId, userId)) ?? null;
     const listAppeals = (guildId, status = "open") => all("SELECT * FROM ban_appeals WHERE guild_id = ? AND status = ? ORDER BY id DESC LIMIT 50", guildId, status).map(clean);
+    const lastAppeal = (guildId, userId) => clean(get("SELECT * FROM ban_appeals WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1", guildId, userId)) ?? null;
     const getAppeal = (guildId, id) => clean(get("SELECT * FROM ban_appeals WHERE guild_id = ? AND id = ?", guildId, id)) ?? null;
     const decideAppeal = (guildId, id, status, by, now) => run("UPDATE ban_appeals SET status = ?, decided_by = ?, decided_at = ? WHERE guild_id = ? AND id = ? AND status = 'open'", status, by, now, guildId, id).changes;
     const modCounts = guildId => Object.fromEntries(all("SELECT action, COUNT(*) AS n FROM mod_cases WHERE guild_id = ? GROUP BY action", guildId).map(r => [r.action, r.n]));
@@ -302,5 +303,5 @@ export function communityStore({ run, get, all, clean, now }) {
 
     return { getCommunity, setCommunity, allCommunity, getXp, addXp, setXp, xpGuildsOf, xpRank, xpTop, countXpMembers, listLevelRoles, setLevelRole, removeLevelRole,
         recordJoin, recordLeave, growth, everJoined, inviteStats, inviteTop, whoInvited, getInviteLink, setInviteLink, inviteLinkOwner, listRewards, setReward, removeReward,
-        listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, addCase, getCase, listCases, countCases, warnCount, clearWarns, addTempBan, dueTempBans, dropTempBan, tempBans, modStats, addAppeal, openAppeal, listAppeals, getAppeal, decideAppeal, modCounts, addAnnouncement, listAnnouncements, communityExport, forgetCommunityUser, forgetCommunityGuild };
+        listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, addCase, getCase, listCases, countCases, warnCount, clearWarns, addTempBan, dueTempBans, dropTempBan, tempBans, modStats, addAppeal, openAppeal, lastAppeal, listAppeals, getAppeal, decideAppeal, modCounts, addAnnouncement, listAnnouncements, communityExport, forgetCommunityUser, forgetCommunityGuild };
 }

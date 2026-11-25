@@ -833,12 +833,15 @@ test("the public appeal page works signed out and lands in the Admin panel, wher
         const errors = []; anon.on("pageerror", e => errors.push(e.message));
         await anon.goto(`${o.base}/appeal`);
         await anon.getByText("You don't need to sign in.").first().waitFor({ timeout: 20_000 });
-        await anon.getByPlaceholder(/Your Discord user ID/).fill(WHO);
+        await anon.getByPlaceholder("Your Discord user ID (a long number)", { exact: true }).fill(WHO);
         await anon.getByPlaceholder(/What happened/).fill("I was sorry about the spam and it won't happen again.");
         await anon.getByPlaceholder(/Optional: how to reach you/).fill("me@example.com");
         await anon.getByRole("button", { name: "Send appeal" }).evaluate(el => el.click());
         await anon.getByText("Appeal sent").first().waitFor({ timeout: 10_000 });
         assert.deepEqual(errors, []);
+        await anon.getByPlaceholder("Your Discord user ID", { exact: true }).fill(WHO);
+        await anon.getByRole("button", { name: "Check", exact: true }).evaluate(el => el.click());
+        await anon.getByText(/is waiting for an answer/).waitFor({ timeout: 10_000 });
         assert.equal(o.db.listAppeals("site").length, 1);
         assert.equal(o.db.listAppeals("site")[0].contact, "me@example.com");
         // 2. The owner sees it in Admin and accepts.

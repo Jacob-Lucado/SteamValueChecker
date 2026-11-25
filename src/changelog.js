@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.115", date: "2026-11-24", title: "Check on your appeal", items: [
+        "The appeal page now has a Check box: enter your Discord user ID to see whether your Steam Value Checker appeal is waiting, accepted or denied. Only the status is shown.",
+    ] },
     { version: "2026.11.114", date: "2026-11-24", title: "Restricted people are told where to appeal", items: [
         "When someone who has been restricted tries a command, the bot's reply now includes a link to the appeal page.",
     ] },

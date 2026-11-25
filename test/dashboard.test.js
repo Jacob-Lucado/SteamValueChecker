@@ -4334,3 +4334,17 @@ test("the restricted message points to the appeal page when the site has an addr
     assert.match(restrictedText("https://steamvaluechecker.com/"), /appeal here: https:\/\/steamvaluechecker\.com\/appeal$/);
     assert.match(restrictedText(null), /contact the bot owner\.$/);
 });
+
+test("appeal status: anyone can ask where an appeal stands, and only the status comes back", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const WHO = "900000000000000999";
+    const get = id => fetch(o.base + "/api/public/appeal/status?user_id=" + id).then(r => r.json());
+    assert.deepEqual(await get(WHO), { found: false });
+    o.db.banUser(WHO, "spam", "u1");
+    o.db.addAppeal("site", WHO, "private words I would rather not share", Date.now());
+    const open = await get(WHO); assert.equal(open.status, "open"); assert.ok(!JSON.stringify(open).includes("private words"));
+    o.db.decideAppeal("site", o.db.lastAppeal("site", WHO).id, "denied", "u1", Date.now());
+    assert.equal((await get(WHO)).status, "denied");
+    assert.equal((await fetch(o.base + "/api/public/appeal/status?user_id=abc")).status, 400);
+    await o.close();
+});

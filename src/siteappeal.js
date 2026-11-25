@@ -21,6 +21,13 @@ export function createSiteAppeals({ db, config, dm = null, now = Date.now, log =
         if (config.ownerId) { try { db.addNotification(config.ownerId, { type: "appeal", title: "New restriction appeal", body: `${id}: ${why.slice(0, 140)}` }); } catch { /* the Admin panel still lists it */ } }
         return { appeal: { id: a.id, status: a.status } };
     }
+    /** Where is my appeal? Only the status comes back (no text, no names), so asking about someone else's ID gives away almost nothing. */
+    function status(userId) {
+        const id = String(userId ?? "").replace(/\D/g, "");
+        if (!/^\d{15,25}$/.test(id)) throw new HttpError(400, "That doesn't look like a Discord user ID.");
+        const a = db.lastAppeal(SITE, id);
+        return a ? { found: true, status: a.status, sent: a.created_at, decided: a.decided_at ?? null, stillRestricted: Boolean(db.isBanned(id)) } : { found: false };
+    }
     const list = (status = "open") => db.listAppeals(SITE, status).map(a => ({ ...a, restricted: Boolean(db.isBanned(a.user_id)), reason: db.getBan(a.user_id)?.reason ?? "" }));
     /** The owner answers. Accepting lifts the restriction. The person gets a direct message if the bot can send one. */
     async function decide({ id, accept, note = "", actorId }) {
@@ -33,5 +40,5 @@ export function createSiteAppeals({ db, config, dm = null, now = Date.now, log =
         if (dm) { try { await dm(a.user_id, { embeds: [{ color: accept ? 0x57f287 : 0xed4245, title: accept ? "Your appeal was accepted" : "Your appeal was denied", description: accept ? "Your access to Steam Value Checker is back." + (clean(note) ? `\n\n${clean(note).slice(0, 500)}` : "") : "Your restriction on Steam Value Checker stays." + (clean(note) ? `\n\n${clean(note).slice(0, 500)}` : "") }] }); told = true; } catch { /* DMs closed */ } }
         return { appeal: { ...a, status: accept ? "accepted" : "denied" }, told };
     }
-    return { submit, list, decide };
+    return { submit, status, list, decide };
 }
