@@ -33,6 +33,10 @@ server {
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), usb=()" always;
 
     gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 512;
+    gzip_vary on;
+    gzip_proxied any;
     gzip_types text/plain text/css application/json application/javascript text/javascript image/svg+xml application/wasm;
 
     # Fly's health check
