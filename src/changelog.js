@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.125", date: "2026-11-26", title: "Quieter memory warnings", items: [
+        "The bot log no longer posts a memory warning every minute. It now speaks up only when memory gets close to the machine's limit, then stays quiet unless it keeps climbing or half an hour passes.",
+    ] },
     { version: "2026.11.124", date: "2026-11-25", title: "Your buyer grade", items: [
         "The Library page now grades how well you buy, from A to F. Each game you recorded a price for is compared with the lowest price it has ever had, and you get how many you caught at the bottom and what waiting would have saved. It needs five games with a price.",
     ] },

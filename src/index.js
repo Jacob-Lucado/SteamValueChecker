@@ -1,3 +1,4 @@
+import { memoryWatch } from "./memwatch.js";
 import { createStartChannel } from "./startchannel.js";
 import { withoutInflated } from "./fakedeals.js";
 import { steamReviews } from "./reviews.js";
@@ -1219,7 +1220,8 @@ const memNote = () => { const m = process.memoryUsage(); return `rss ${Math.roun
 console.log(`${ACTIVITY}[boot] Bot started, ${memNote()}, heap limit ${Math.round(v8.getHeapStatistics().heap_size_limit / 1048576)} MB`);
 for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { try { music?.shutdown(); } catch { /* */ } console.log(`${ACTIVITY}[restart] Bot stopping: the host sent ${sig} (a deploy or restart). Memory: ${memNote()}`); setTimeout(() => { try { db.close?.(); } catch { /* already closed */ } process.exit(0); }, 300); });
 process.on("exit", code => { try { if (code !== 0) console.error(`[exit] bot exited unexpectedly with code ${code}, ${memNote()}`); } catch { /* nothing left to do */ } });
-setInterval(() => { const m = process.memoryUsage(); if (m.rss > 380 * 1048576) console.error(`[memory] high usage: ${memNote()}`); }, 60_000).unref();
+const memCheck = memoryWatch({ warnMb: Number(process.env.MEMORY_WARN_MB) || undefined });
+setInterval(() => { if (memCheck(process.memoryUsage().rss) !== null) console.error(`[memory] high usage: ${memNote()}`); }, 60_000).unref();
 
 process.on("unhandledRejection", err => console.error(`[unhandledRejection] ${err?.stack ?? err}`));
 // Discord's gateway sits behind Cloudflare, and when that has a bad minute the connection attempt fails with a 5xx. That's their outage, not a bug:
