@@ -1,7 +1,7 @@
 // Wishlists, price alerts and Steam linking.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
 import { toPng, winsCardSvg } from "../communitycards.js";
-import { currencyOfRegion, winsFor, winsSummary } from "../alertwins.js";
+import { currencyOfRegion, getGoal, goalProgress as savingsProgress, setGoal, winsFor, winsSummary } from "../alertwins.js";
 import { HttpError } from "./http.js";
 import { addFamily, removeFamily, familyView } from "../family.js";
 import { wrappedData, SLIDES } from "../wrapped.js";
@@ -224,7 +224,12 @@ export function createWishlistRoutes(ctx) {
         // what the sale alerts saved: games that landed in the library within two weeks of an alert
         "GET /api/alerts/wins": async (req) => {
             const s = session(req), wins = winsFor(db, s.userId), at = now();
-            return { all: winsSummary(wins), month: winsSummary(wins, { since: at - 30 * 86400_000 }), currency: currencyOfRegion(db.getUser(s.userId)?.region) };
+            return { all: winsSummary(wins), month: winsSummary(wins, { since: at - 30 * 86400_000 }), currency: currencyOfRegion(db.getUser(s.userId)?.region), goal: savingsProgress(wins, getGoal(db, s.userId), at) };
+        },
+        "POST /api/alerts/wins/goal": async (req, body) => {
+            const s = session(req);
+            try { setGoal(db, s.userId, body.amount ?? null); } catch (e) { throw new HttpError(400, e.message); }
+            return { goal: savingsProgress(winsFor(db, s.userId), getGoal(db, s.userId), now()) };
         },
         // a picture to share: the same numbers as the panel, drawn as a card
         "GET /api/alerts/wins/card": async (req) => {

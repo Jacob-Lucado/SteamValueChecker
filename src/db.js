@@ -133,6 +133,19 @@ CREATE TABLE IF NOT EXISTS alert_log (
     at         INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS alert_log_user ON alert_log(discord_id, at);
+CREATE TABLE IF NOT EXISTS win_ledger (
+    discord_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
+    itad_id    TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    shop       TEXT,
+    regular    REAL NOT NULL,
+    paid       REAL NOT NULL,
+    saved      REAL NOT NULL,
+    at         INTEGER NOT NULL,
+    owned_at   INTEGER NOT NULL,
+    actual     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (discord_id, itad_id)
+);
 CREATE TABLE IF NOT EXISTS seen (
     discord_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
     key        TEXT NOT NULL,
@@ -619,6 +632,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         all("SELECT * FROM alert_log WHERE discord_id = ? ORDER BY at DESC, id DESC LIMIT ?", discordId, limit).map(clean);
     /** Sale alerts joined to the same game turning up in the member's library afterwards (see alertwins.js). */
     const alertWinRows = discordId => all("SELECT a.itad_id, a.title, a.shop, a.price, a.regular, a.at, l.paid, l.added_at AS owned_at FROM alert_log a JOIN library l ON l.discord_id = a.discord_id AND l.itad_id = a.itad_id WHERE a.discord_id = ? AND a.kind = 'sale' AND a.itad_id IS NOT NULL", discordId).map(clean);
+    // Alert wins are kept for good here, because the alert log itself is pruned after 90 days.
+    const recordWin = (id, w) => run("INSERT OR IGNORE INTO win_ledger (discord_id, itad_id, title, shop, regular, paid, saved, at, owned_at, actual) VALUES (?,?,?,?,?,?,?,?,?,?)", id, w.itadId, w.title, w.shop ?? null, w.regular, w.paid, w.saved, w.at, w.ownedAt, w.actual ? 1 : 0);
+    const listWins = id => all("SELECT itad_id AS itadId, title, shop, regular, paid, saved, at, owned_at AS ownedAt, actual FROM win_ledger WHERE discord_id = ? ORDER BY saved DESC", id).map(r => ({ ...clean(r), actual: Boolean(r.actual) }));
     const winUsers = () => all("SELECT * FROM users WHERE paused = 0 AND discord_id IN (SELECT DISTINCT discord_id FROM alert_log WHERE kind = 'sale')").map(clean);
     const pruneAlertLog = (olderThanMs = 90 * 86400_000) => run("DELETE FROM alert_log WHERE at < ?", now() - olderThanMs).changes;
     const hasSeen = (discordId, key) => Boolean(get("SELECT 1 AS x FROM seen WHERE discord_id = ? AND key = ?", discordId, key));
@@ -974,7 +990,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta, ...priceLog, ...family, saveSession, dropSession, loadSessions, setTitleFix, removeTitleFix, listTitleFixes,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, popularApps, funnelMark, funnelStats, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, indieDevGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
-        logAlert, listAlerts, alertWinRows, winUsers, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
+        logAlert, listAlerts, alertWinRows, recordWin, listWins, winUsers, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedUsers, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,

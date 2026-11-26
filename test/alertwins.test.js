@@ -57,3 +57,43 @@ test("the share card draws the total and the best catches, and renders to a pict
     const png = toPng(svg);
     assert.equal(png.subarray(1, 4).toString(), "PNG");
 });
+
+test("wins are kept in the ledger after the alert log forgets them", () => {
+    const db = openDb(":memory:");
+    db.ensureUser("u1");
+    db.logAlert({ discord_id: "u1", itad_id: "a", title: "Hades", kind: "sale", price: 10, regular: 25, shop: "Steam", via: "dm" });
+    db.upsertLibrary("u1", [{ itad_id: "a", title: "Hades", paid: null }]);
+    assert.equal(winsFor(db, "u1").length, 1);
+    db.pruneAlertLog(-60_000); // everything is now older than the cutoff
+    assert.equal(db.alertWinRows("u1").length, 0, "the alert log is empty");
+    const [w] = winsFor(db, "u1");
+    assert.equal(w.title, "Hades"); assert.equal(w.saved, 15, "but the win is still there");
+});
+
+test("a savings goal is validated, and progress counts this calendar year only", async () => {
+    const { getGoal, setGoal, goalProgress } = await import("../src/alertwins.js");
+    const db = openDb(":memory:"); db.ensureUser("u1");
+    assert.equal(getGoal(db, "u1"), null);
+    assert.equal(setGoal(db, "u1", "200.456"), 200.46); assert.equal(getGoal(db, "u1"), 200.46);
+    assert.throws(() => setGoal(db, "u1", 0), RangeError); assert.throws(() => setGoal(db, "u1", 1e9), RangeError); assert.throws(() => setGoal(db, "u1", "abc"), RangeError);
+    assert.equal(setGoal(db, "u1", null), null); assert.equal(getGoal(db, "u1"), null, "clearing removes it");
+    const at = Date.UTC(2026, 10, 26);
+    const wins = [{ saved: 30, ownedAt: Date.UTC(2026, 2, 1) }, { saved: 50, ownedAt: Date.UTC(2025, 11, 31) }, { saved: 10, ownedAt: Date.UTC(2026, 9, 1) }];
+    assert.deepEqual(goalProgress(wins, 100, at), { goal: 100, saved: 40, pct: 40, left: 60, hit: false });
+    assert.equal(goalProgress(wins, 40, at).hit, true); assert.equal(goalProgress(wins, 20, at).pct, 100);
+    assert.equal(goalProgress(wins, null, at).goal, null);
+});
+
+test("the daily pass records wins, and tells a member once when they reach their goal", async () => {
+    const { runAlertWins, setGoal } = await import("../src/alertwins.js");
+    const db = openDb(":memory:"); db.ensureUser("u1");
+    db.logAlert({ discord_id: "u1", itad_id: "a", title: "Hades", kind: "sale", price: 10, regular: 25, shop: "Steam", via: "dm" });
+    db.upsertLibrary("u1", [{ itad_id: "a", title: "Hades", paid: null }]);
+    setGoal(db, "u1", 10);
+    const sent = [], notifier = { deliver: async (u, p) => { sent.push(p.embeds[0].title); return { ok: true }; } };
+    const r = await runAlertWins({ db, notifier });
+    assert.equal(r.goals, 1); assert.ok(sent.some(t => /hit your savings goal of \$10\.00/.test(t)));
+    assert.equal(db.listWins("u1").length, 1, "recorded");
+    db.setMeta("wins:sync", "");
+    assert.equal((await runAlertWins({ db, notifier })).goals, 0, "the same goal is not announced twice");
+});

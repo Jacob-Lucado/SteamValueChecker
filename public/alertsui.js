@@ -105,16 +105,25 @@
       }));
     }
     const wins = h("div", { class: "panel", hidden: true });
-    api("/api/alerts/wins").then(w => {
-      if (!w.all.count) return;
+    const drawWins = w => {
       const money = n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: w.currency || "USD" }).format(n); } catch { return n.toFixed(2); } };
+      const g = w.goal, goalInput = h("input", { type: "number", min: "1", step: "1", placeholder: "Yearly savings goal", value: g.goal ? String(g.goal) : "", "aria-label": "Yearly savings goal" });
+      const saveGoal = h("button", { class: "btn blue small", type: "button", text: g.goal ? "Change goal" : "Set goal" });
+      saveGoal.addEventListener("click", () => busy(saveGoal, async () => { const r = await api("/api/alerts/wins/goal", { amount: goalInput.value === "" ? null : Number(goalInput.value) }); w.goal = r.goal; toast(r.goal.goal ? "Goal saved." : "Goal removed."); drawWins(w); }));
       wins.hidden = false;
       wins.replaceChildren(h("h3", { text: "🏆 Alert wins" }),
-        h("p", { text: `Your alerts have saved you ${money(w.all.saved)} on ${w.all.count} game${w.all.count === 1 ? "" : "s"}` + (w.month.count ? `, ${money(w.month.saved)} of it in the last 30 days.` : ".") }),
-        h("ul", { class: "muted small" }, ...w.all.list.slice(0, 5).map(x => h("li", { text: `${x.title}: ${money(x.paid)} instead of ${money(x.regular)}${x.shop ? " at " + x.shop : ""}` }))),
-        (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Download a share card" }); b.addEventListener("click", () => busy(b, async () => { const r = await api("/api/alerts/wins/card"); const a = h("a", { href: r.image, download: "my-alert-wins.png" }); document.body.appendChild(a); a.click(); a.remove(); })); return b; })(),
-        h("p", { class: "muted small", text: "Counted when a game you were alerted about shows up in your Steam library within two weeks, against the regular price." }));
-    }).catch(() => {});
+        w.all.count
+          ? h("p", { text: `Your alerts have saved you ${money(w.all.saved)} on ${w.all.count} game${w.all.count === 1 ? "" : "s"}` + (w.month.count ? `, ${money(w.month.saved)} of it in the last 30 days.` : ".") })
+          : h("p", { class: "muted", text: "No wins yet. When a game you were alerted about lands in your Steam library, it shows up here with what the alert saved you." }),
+        g.goal ? h("div", { class: "goal" },
+          h("p", { text: g.hit ? `🎯 Goal reached: ${money(g.saved)} saved this year, past your ${money(g.goal)} goal.` : `This year: ${money(g.saved)} of ${money(g.goal)} (${g.pct}%), ${money(g.left)} to go.` }),
+          h("div", { class: "bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(g.pct), "aria-label": "Progress to your yearly savings goal" }, (() => { const f = h("div", { class: "fill" }); f.style.width = g.pct + "%"; return f; })())) : null,
+        h("div", { class: "row" }, goalInput, saveGoal),
+        w.all.count ? h("ul", { class: "muted small" }, ...w.all.list.slice(0, 5).map(x => h("li", { text: `${x.title}: ${money(x.paid)} instead of ${money(x.regular)}${x.shop ? " at " + x.shop : ""}` }))) : null,
+        w.all.count ? (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Download a share card" }); b.addEventListener("click", () => busy(b, async () => { const r = await api("/api/alerts/wins/card"); const a = h("a", { href: r.image, download: "my-alert-wins.png" }); document.body.appendChild(a); a.click(); a.remove(); })); return b; })() : null,
+        h("p", { class: "muted small", text: "Counted when a game you were alerted about shows up in your Steam library within two weeks, against the regular price. Wins are kept for good, and the goal counts this calendar year." }));
+    };
+    api("/api/alerts/wins").then(drawWins).catch(() => {});
     app.replaceChildren(
       pageHead("Alert settings", "How and where you hear about sales, free games, codes and giveaways."), reachBox, wins,
       h("div", { class: "panel" },

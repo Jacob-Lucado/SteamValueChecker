@@ -4380,3 +4380,16 @@ test("library: the buyer grade compares what was paid with the lowest price ever
         assert.equal(b.graded, 5); assert.equal(b.perfect, 3); assert.equal(b.score, Math.round((300 + 30) / 5)); assert.equal(b.grade, "C"); assert.equal(b.lost, 30);
     } finally { await t.close(); }
 });
+
+test("alert wins: a yearly goal can be set, shown with progress and cleared", async () => {
+    const o = await signedIn();
+    try {
+        o.db.logAlert({ discord_id: "u1", itad_id: "a", title: "Hades", kind: "sale", price: 10, regular: 25, shop: "Steam", via: "dm" });
+        o.db.upsertLibrary("u1", [{ itad_id: "a", title: "Hades", paid: null }]);
+        assert.equal((await o.request("/api/alerts/wins")).data.goal.goal, null);
+        const set = await o.request("/api/alerts/wins/goal", { method: "POST", body: { amount: 60 } });
+        assert.deepEqual([set.data.goal.goal, set.data.goal.saved, set.data.goal.pct], [60, 15, 25]);
+        assert.equal((await o.request("/api/alerts/wins/goal", { method: "POST", body: { amount: -5 } })).status, 400);
+        assert.equal((await o.request("/api/alerts/wins/goal", { method: "POST", body: { amount: null } })).data.goal.goal, null);
+    } finally { await o.close(); }
+});

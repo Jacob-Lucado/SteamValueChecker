@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.126", date: "2026-11-26", title: "Savings goal", items: [
+        "On the Alerts page you can set a yearly savings goal for Alert wins. It shows a progress bar for the year and sends you a card when you reach it.",
+        "Alert wins are now kept for good. Before, they could only reach back as far as the 90 days of alert history.",
+    ] },
     { version: "2026.11.125", date: "2026-11-26", title: "Quieter memory warnings", items: [
         "The bot log no longer posts a memory warning every minute. It now speaks up only when memory gets close to the machine's limit, then stays quiet unless it keeps climbing or half an hour passes.",
     ] },

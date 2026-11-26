@@ -908,13 +908,18 @@ test("the Alerts page shows Alert wins once an alert was followed by owning the 
         const errors = []; page.on("pageerror", e => errors.push(e.message));
         await page.goto(`${o.base}/alerts`, { waitUntil: "load" });
         await page.getByText("Alert settings").first().waitFor({ timeout: 20_000 });
-        assert.equal(await page.getByText("🏆 Alert wins").count(), 0, "nothing shows before there is a win");
+        await page.getByText("🏆 Alert wins").waitFor({ timeout: 20_000 });
+        assert.equal(await page.getByText("No wins yet.").count(), 1, "an empty state, with the goal box ready, before there is a win");
         o.db.logAlert({ discord_id: "u1", itad_id: "a", title: "Hades", kind: "sale", price: 10, regular: 25, shop: "Steam", via: "dm" });
         o.db.upsertLibrary("u1", [{ itad_id: "a", title: "Hades", paid: null }]);
         await page.goto(`${o.base}/alerts`, { waitUntil: "load" });
         await page.getByText("🏆 Alert wins").waitFor({ timeout: 20_000 });
         assert.equal(await page.getByText("saved you $15.00 on 1 game").count(), 1);
         assert.equal(await page.getByText("Hades: $10.00 instead of $25.00 at Steam").count(), 1);
+        await page.getByLabel("Yearly savings goal").fill("60");
+        await page.getByRole("button", { name: "Set goal" }).evaluate(el => el.click());
+        await page.getByText("This year: $15.00 of $60.00 (25%), $45.00 to go.").waitFor({ timeout: 10_000 });
+        assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"), "25");
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
