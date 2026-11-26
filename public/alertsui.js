@@ -104,8 +104,18 @@
         catch (e) { toast(e.message, "warn"); }
       }));
     }
+    const wins = h("div", { class: "panel", hidden: true });
+    api("/api/alerts/wins").then(w => {
+      if (!w.all.count) return;
+      const money = n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: w.currency || "USD" }).format(n); } catch { return n.toFixed(2); } };
+      wins.hidden = false;
+      wins.replaceChildren(h("h3", { text: "🏆 Alert wins" }),
+        h("p", { text: `Your alerts have saved you ${money(w.all.saved)} on ${w.all.count} game${w.all.count === 1 ? "" : "s"}` + (w.month.count ? `, ${money(w.month.saved)} of it in the last 30 days.` : ".") }),
+        h("ul", { class: "muted small" }, ...w.all.list.slice(0, 5).map(x => h("li", { text: `${x.title}: ${money(x.paid)} instead of ${money(x.regular)}${x.shop ? " at " + x.shop : ""}` }))),
+        h("p", { class: "muted small", text: "Counted when a game you were alerted about shows up in your Steam library within two weeks, against the regular price." }));
+    }).catch(() => {});
     app.replaceChildren(
-      pageHead("Alert settings", "How and where you hear about sales, free games, codes and giveaways."), reachBox,
+      pageHead("Alert settings", "How and where you hear about sales, free games, codes and giveaways."), reachBox, wins,
       h("div", { class: "panel" },
         h("h3", { text: "Delivery" }),
         h("label", { class: "check" }, dm, "Direct message. If it cannot be delivered, the server alert channel is used as a fallback."),

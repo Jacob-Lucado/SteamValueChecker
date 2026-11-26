@@ -86,6 +86,7 @@ import { runYearInGames } from "./yearly.js";
 import { runServerWrapped } from "./serverwrapped.js";
 import { runRivalries } from "./rivalry.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
+import { runAlertWins } from "./alertwins.js";
 import { runReviewDrops, runWinBack, runTimeCapsule } from "./smartalerts.js";
 import { runSocialDigest } from "./socialdigest.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
@@ -487,6 +488,7 @@ client.once(Events.ClientReady, c => {
             result.achv = await ops.job("achievement nudges", () => runAchievementNudges({ db, notifier }));
             result.digest = await ops.job("feed digest", () => runSocialDigest({ db, notifier, dashboardUrl: cfg.dashboard?.publicUrl ?? null }));
             result.nudge = await ops.job("backlog pick", () => runBacklogNudge({ db, notifier }));
+            result.wins = await ops.job("alert wins", () => runAlertWins({ db, notifier }));
             result.reviewDrops = await ops.job("review drops", () => runReviewDrops({ db, notifier }));
             result.winBack = await ops.job("win-back patches", () => runWinBack({ db, news, notifier }));
             result.capsule = await ops.job("time capsule", () => runTimeCapsule({ db, notifier }));

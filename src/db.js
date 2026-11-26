@@ -617,6 +617,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     );
     const listAlerts = (discordId, limit = 100) =>
         all("SELECT * FROM alert_log WHERE discord_id = ? ORDER BY at DESC, id DESC LIMIT ?", discordId, limit).map(clean);
+    /** Sale alerts joined to the same game turning up in the member's library afterwards (see alertwins.js). */
+    const alertWinRows = discordId => all("SELECT a.itad_id, a.title, a.shop, a.price, a.regular, a.at, l.paid, l.added_at AS owned_at FROM alert_log a JOIN library l ON l.discord_id = a.discord_id AND l.itad_id = a.itad_id WHERE a.discord_id = ? AND a.kind = 'sale' AND a.itad_id IS NOT NULL", discordId).map(clean);
+    const winUsers = () => all("SELECT * FROM users WHERE paused = 0 AND discord_id IN (SELECT DISTINCT discord_id FROM alert_log WHERE kind = 'sale')").map(clean);
     const pruneAlertLog = (olderThanMs = 90 * 86400_000) => run("DELETE FROM alert_log WHERE at < ?", now() - olderThanMs).changes;
     const hasSeen = (discordId, key) => Boolean(get("SELECT 1 AS x FROM seen WHERE discord_id = ? AND key = ?", discordId, key));
     const markSeen = (discordId, key) => run("INSERT OR IGNORE INTO seen (discord_id, key, at) VALUES (?,?,?)", discordId, key, now());
@@ -970,7 +973,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta, ...priceLog, ...family, saveSession, dropSession, loadSessions, setTitleFix, removeTitleFix, listTitleFixes,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, popularApps, funnelMark, funnelStats, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, indieDevGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
-        logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
+        logAlert, listAlerts, alertWinRows, winUsers, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,

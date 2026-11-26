@@ -1,5 +1,6 @@
 // Wishlists, price alerts and Steam linking.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
+import { currencyOfRegion, winsFor, winsSummary } from "../alertwins.js";
 import { HttpError } from "./http.js";
 import { addFamily, removeFamily, familyView } from "../family.js";
 import { wrappedData, SLIDES } from "../wrapped.js";
@@ -218,6 +219,11 @@ export function createWishlistRoutes(ctx) {
             cooldown(s.userId, "sample");
             try { await dm(s.userId, p); } catch { throw new HttpError(409, "I couldn't send you a DM. Open your DMs for this server's members, then try again."); }
             return { ok: true };
+        },
+        // what the sale alerts saved: games that landed in the library within two weeks of an alert
+        "GET /api/alerts/wins": async (req) => {
+            const s = session(req), wins = winsFor(db, s.userId), at = now();
+            return { all: winsSummary(wins), month: winsSummary(wins, { since: at - 30 * 86400_000 }), currency: currencyOfRegion(db.getUser(s.userId)?.region) };
         },
         "GET /api/alerts/history": async (req) => {
             const s = session(req);
