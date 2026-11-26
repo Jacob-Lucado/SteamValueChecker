@@ -1,4 +1,5 @@
 // The member's library: games they own, what they paid, and what that adds up to.
+import { currencyOfRegion, winsFor, winsSummary } from "./alertwins.js";
 import { summarize } from "./report.js";
 import { UserError } from "./errors.js";
 
@@ -208,7 +209,7 @@ export function finishedLeague(db, guildId, nowMs = Date.now(), { limit = 10 } =
  * "games" is how many games are in their library. Both are plain counts, so they are fair across currencies.
  * Returns [{ discord_id, score, label }], biggest first.
  */
-export const EXTRA_BOARDS = { hours: "Hours played this year", games: "Biggest library", completed: "Most games finished (all time)" };
+export const EXTRA_BOARDS = { hours: "Hours played this year", games: "Biggest library", completed: "Most games finished (all time)", wins: "Alert wins: games caught on sale" };
 export function extraBoard(db, guildId, board, nowMs = Date.now(), { limit = 10 } = {}) {
     if (board === "hours") {
         const from = new Date(Date.UTC(new Date(nowMs).getUTCFullYear(), 0, 1)).toISOString().slice(0, 10);
@@ -216,6 +217,12 @@ export function extraBoard(db, guildId, board, nowMs = Date.now(), { limit = 10 
     }
     if (board === "completed") {
         return db.sharedFinished(guildId, 0, Number.MAX_SAFE_INTEGER).slice(0, limit).map(r => ({ discord_id: r.discord_id, score: r.done, label: `${r.done.toLocaleString("en-US")} finished` }));
+    }
+    if (board === "wins") {
+        // ranked by how many games, since members shop in different currencies
+        return db.sharedUsers(guildId).map(u => ({ id: u.discord_id, region: u.region, sum: winsSummary(winsFor(db, u.discord_id)) })).filter(r => r.sum.count > 0)
+            .sort((a, b) => b.sum.count - a.sum.count || b.sum.saved - a.sum.saved).slice(0, limit)
+            .map(r => { const cur = currencyOfRegion(r.region); let money; try { money = new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(r.sum.saved); } catch { money = r.sum.saved.toFixed(2); } return { discord_id: r.id, score: r.sum.count, label: `${r.sum.count} win${r.sum.count === 1 ? "" : "s"}, ${money} saved` }; });
     }
     if (board === "games") {
         return db.sharedLeaderboard(guildId).filter(r => r.games > 0).sort((a, b) => b.games - a.games).slice(0, limit).map(r => ({ discord_id: r.discord_id, score: r.games, label: `${r.games.toLocaleString("en-US")} games` }));

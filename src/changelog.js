@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.123", date: "2026-11-25", title: "Alert wins leaderboard", items: [
+        "`/server leaderboard` has a new board, Alert wins: members who opted in with `/alerts share`, ranked by how many games their sale alerts caught, with what they saved.",
+    ] },
     { version: "2026.11.122", date: "2026-11-25", title: "Bundles know what you own", items: [
         "On the Bundles page, each bundle now says how many of its games are already in your Steam library, and how many would be new to you.",
         "Bundle match messages mention it too, so you can tell at a glance whether a bundle is mostly stuff you have.",

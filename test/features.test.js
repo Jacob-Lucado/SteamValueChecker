@@ -428,6 +428,19 @@ test("the all-time completions board ranks opted-in members by games finished, w
     assert.deepEqual(board.map(e => [e.discord_id, e.score, e.label]), [["a", 2, "2 finished"], ["b", 1, "1 finished"]]);
 });
 
+test("the alert wins board ranks opted-in members by games caught on sale", async () => {
+    const { extraBoard, EXTRA_BOARDS } = await import("../src/library.js");
+    assert.ok(EXTRA_BOARDS.wins);
+    const db = openDb(":memory:");
+    for (const id of ["a", "b", "c"]) db.ensureUser(id, "g1");
+    db.updateUser("a", { share: 1 }); db.updateUser("b", { share: 1 }); db.updateUser("b", { region: "GB" }); // c has not opted in
+    const win = (u, id, price, regular) => { db.logAlert({ discord_id: u, itad_id: id, title: id, kind: "sale", price, regular, shop: "Steam", via: "dm" }); db.upsertLibrary(u, [{ itad_id: id, title: id, paid: null }]); };
+    win("a", "x", 10, 25); win("b", "y", 5, 20); win("b", "z", 4, 10); win("c", "q", 1, 50);
+    const board = extraBoard(db, "g1", "wins");
+    assert.deepEqual(board.map(e => [e.discord_id, e.score]), [["b", 2], ["a", 1]]);
+    assert.equal(board[0].label, "2 wins, \u00a321.00 saved"); assert.equal(board[1].label, "1 win, $15.00 saved");
+});
+
 test("every slash command has a dashboard counterpart", async () => {
     const { readFileSync } = await import("node:fs");
     const server = readdirSync(new URL("../src/dashboard/", import.meta.url)).filter(f => f === "server.js" || f.endsWith("routes.js")).map(f => readFileSync(new URL(`../src/dashboard/${f}`, import.meta.url), "utf8")).join("\n");

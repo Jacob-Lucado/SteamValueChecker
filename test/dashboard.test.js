@@ -571,6 +571,10 @@ test("shared server list and leaderboard are limited to servers the member is in
     assert.equal(board.data.entries[0].name, "Jacob");
     assert.equal(Math.round(board.data.entries[0].savedPct), 80);
     assert.equal((await t.request("/api/servers/leaderboard?guild=g-stranger")).status, 403);
+    t.db.logAlert({ discord_id: "u1", itad_id: "w1", title: "Hades", kind: "sale", price: 10, regular: 25, shop: "Steam", via: "dm" });
+    t.db.upsertLibrary("u1", [{ itad_id: "w1", title: "Hades", paid: null }]);
+    const wins = await t.request("/api/servers/leaderboard?guild=g-member&board=wins");
+    assert.equal(wins.data.entries[0].name, "Jacob"); assert.equal(wins.data.entries[0].label, "1 win, $15.00 saved");
     await t.close();
 });
 

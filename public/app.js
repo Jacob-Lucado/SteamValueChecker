@@ -1019,7 +1019,7 @@ window.SVC_SITE = envIn => {
   }
 
   async function board(g, into) {
-    const BOARDS = [["savings", "Most saved vs MSRP"], ["finished", "Backlog league (this month)"], ["hours", "Hours played this year"], ["games", "Biggest library"], ["completed", "Most games finished (all time)"]];
+    const BOARDS = [["savings", "Most saved vs MSRP"], ["finished", "Backlog league (this month)"], ["hours", "Hours played this year"], ["games", "Biggest library"], ["completed", "Most games finished (all time)"], ["wins", "Alert wins"]];
     const pick = h("select", { "aria-label": "Leaderboard" }, BOARDS.map(([v, t]) => h("option", { value: v, text: t })));
     const list = h("div");
     const note = h("p", { class: "muted small" });
