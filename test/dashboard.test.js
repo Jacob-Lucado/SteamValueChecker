@@ -4352,3 +4352,17 @@ test("appeal status: anyone can ask where an appeal stands, and only the status 
     assert.equal((await fetch(o.base + "/api/public/appeal/status?user_id=abc")).status, 400);
     await o.close();
 });
+
+test("alert wins: the panel numbers and the share card come from the member's own alerts and library", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    try {
+        assert.equal((await o.request("/api/alerts/wins")).data.all.count, 0);
+        assert.equal((await o.request("/api/alerts/wins/card")).status, 404, "no card until there is a win");
+        o.db.logAlert({ discord_id: "u1", itad_id: "a", title: "Hades", kind: "sale", price: 10, regular: 25, shop: "Steam", via: "dm" });
+        o.db.upsertLibrary("u1", [{ itad_id: "a", title: "Hades", paid: null }]);
+        const w = (await o.request("/api/alerts/wins")).data;
+        assert.equal(w.all.count, 1); assert.equal(w.all.saved, 15); assert.equal(w.month.count, 1); assert.equal(w.currency, "USD");
+        const c = (await o.request("/api/alerts/wins/card")).data;
+        assert.match(c.image, /^data:image\/png;base64,/);
+    } finally { await o.close(); }
+});

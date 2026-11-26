@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.121", date: "2026-11-25", title: "Share your alert wins", items: [
+        "The Alert wins panel on the Alerts page has a Download a share card button: a picture with what your alerts saved you and your best catches, ready to post.",
+    ] },
     { version: "2026.11.120", date: "2026-11-25", title: "Alert wins", items: [
         "When a sale alert is followed by that game showing up in your Steam library within two weeks, it counts as a win. The Alerts page adds them up: what your alerts have saved you against the regular price, with your best catches.",
         "Once a month you get a short card with what the last 30 days saved. It comes with your digest alerts, so muting those mutes it.",

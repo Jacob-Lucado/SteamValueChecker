@@ -1,5 +1,6 @@
 // Wishlists, price alerts and Steam linking.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
+import { toPng, winsCardSvg } from "../communitycards.js";
 import { currencyOfRegion, winsFor, winsSummary } from "../alertwins.js";
 import { HttpError } from "./http.js";
 import { addFamily, removeFamily, familyView } from "../family.js";
@@ -224,6 +225,14 @@ export function createWishlistRoutes(ctx) {
         "GET /api/alerts/wins": async (req) => {
             const s = session(req), wins = winsFor(db, s.userId), at = now();
             return { all: winsSummary(wins), month: winsSummary(wins, { since: at - 30 * 86400_000 }), currency: currencyOfRegion(db.getUser(s.userId)?.region) };
+        },
+        // a picture to share: the same numbers as the panel, drawn as a card
+        "GET /api/alerts/wins/card": async (req) => {
+            const s = session(req), sum = winsSummary(winsFor(db, s.userId));
+            if (!sum.count) throw new HttpError(404, "No alert wins yet. They show up when a game you were alerted about lands in your library.");
+            cooldown(s.userId, "cardimg");
+            const png = toPng(winsCardSvg({ name: s.username ?? "My", saved: sum.saved, count: sum.count, currency: currencyOfRegion(db.getUser(s.userId)?.region), wins: sum.list }));
+            return { image: "data:image/png;base64," + Buffer.from(png).toString("base64") };
         },
         "GET /api/alerts/history": async (req) => {
             const s = session(req);

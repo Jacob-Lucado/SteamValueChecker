@@ -49,3 +49,11 @@ test("the monthly recap goes out once, only to members with a win, and says what
     assert.equal((await runAlertWins({ db, notifier })).delivered, 0, "not again this month");
     assert.match(winsEmbed({ count: 1, saved: 5, list: [{ title: "X", paid: 5, regular: 10 }] }, "EUR").embeds[0].title, /€5\.00/);
 });
+
+test("the share card draws the total and the best catches, and renders to a picture", async () => {
+    const { winsCardSvg, toPng } = await import("../src/communitycards.js");
+    const svg = winsCardSvg({ name: "Jacob", saved: 31, count: 2, currency: "USD", wins: [{ title: "Celeste", paid: 5, regular: 21 }, { title: "Hades <3 & co", paid: 10, regular: 25 }] });
+    assert.match(svg, /\$31\.00/); assert.match(svg, /2 games/); assert.match(svg, /Hades &lt;3 &amp; co/); assert.match(svg, /JACOB'S ALERT WINS/);
+    const png = toPng(svg);
+    assert.equal(png.subarray(1, 4).toString(), "PNG");
+});

@@ -73,6 +73,27 @@ export function boardSvg({ title, subtitle, rows, empty = "Nobody here yet.", ac
   ${list}`, accent, accent2);
 }
 
+/** A brag card for Alert wins. d: { name, saved, count, currency, wins: [{ title, paid, regular }] } */
+export function winsCardSvg(d) {
+    const fmt = n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: d.currency || "USD" }).format(n); } catch { return Number(n).toFixed(2); } };
+    const rows = (d.wins ?? []).slice(0, 4), h = 350 + rows.length * 64;
+    const list = rows.map((w, n) => {
+        const y = 300 + n * 64, off = w.regular > 0 ? Math.round((1 - w.paid / w.regular) * 100) : 0;
+        return `<rect x="48" y="${y}" width="904" height="54" rx="14" fill="#131c31"/>
+  <text x="74" y="${y + 35}" font-size="24" font-weight="600" fill="#f3f6fc">${esc(cut(w.title, 30))}</text>
+  <text x="936" y="${y + 24}" font-size="22" font-weight="700" fill="#57f287" text-anchor="end">${esc(fmt(w.paid))}</text>
+  <text x="936" y="${y + 44}" font-size="15" font-weight="500" fill="#7f93ba" text-anchor="end">was ${esc(fmt(w.regular))}${off > 0 ? ` · ${off}% off` : ""}</text>`;
+    }).join("\n");
+    return frame(1000, h, `
+  <text x="48" y="70" font-size="20" font-weight="700" fill="#7f93ba" letter-spacing="2">${esc(cut(String(d.name ?? "").toUpperCase(), 28))}'S ALERT WINS</text>
+  <text x="48" y="172" font-size="92" font-weight="800" fill="#f5c542">${esc(fmt(d.saved))}</text>
+  <text x="48" y="222" font-size="28" font-weight="600" fill="#f3f6fc">saved by price alerts on ${d.count} game${d.count === 1 ? "" : "s"}</text>
+  <rect x="48" y="244" width="120" height="4" rx="2" fill="url(#acc)"/>
+  <text x="48" y="282" font-size="15" font-weight="600" fill="#7f93ba" letter-spacing="1.5">BEST CATCHES</text>
+  ${list}
+  <text x="952" y="${h - 22}" font-size="15" font-weight="600" fill="#53648a" text-anchor="end">steamvaluechecker.com</text>`, "#f5c542", "#f0883e");
+}
+
 /** One member's invites. d: { name, art, server, active, total, left, rewards: [{ count, done, role }], by } */
 export function inviteCardSvg(d) {
     const rw = (d.rewards ?? []).slice(0, 4), h = 330 + (rw.length ? 40 + rw.length * 44 : 0);

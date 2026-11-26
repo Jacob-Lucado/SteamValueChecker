@@ -112,6 +112,7 @@
       wins.replaceChildren(h("h3", { text: "🏆 Alert wins" }),
         h("p", { text: `Your alerts have saved you ${money(w.all.saved)} on ${w.all.count} game${w.all.count === 1 ? "" : "s"}` + (w.month.count ? `, ${money(w.month.saved)} of it in the last 30 days.` : ".") }),
         h("ul", { class: "muted small" }, ...w.all.list.slice(0, 5).map(x => h("li", { text: `${x.title}: ${money(x.paid)} instead of ${money(x.regular)}${x.shop ? " at " + x.shop : ""}` }))),
+        (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Download a share card" }); b.addEventListener("click", () => busy(b, async () => { const r = await api("/api/alerts/wins/card"); const a = h("a", { href: r.image, download: "my-alert-wins.png" }); document.body.appendChild(a); a.click(); a.remove(); })); return b; })(),
         h("p", { class: "muted small", text: "Counted when a game you were alerted about shows up in your Steam library within two weeks, against the regular price." }));
     }).catch(() => {});
     app.replaceChildren(
