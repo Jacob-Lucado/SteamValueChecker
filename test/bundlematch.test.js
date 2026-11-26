@@ -65,3 +65,18 @@ test("the dashboard helper maps bundle ids to the member's matching titles", () 
     assert.deepEqual(matchesForUser(db, "u1", found), { [id]: ["Hades"] });
     assert.deepEqual(matchesForUser(db, "nobody", found), {});
 });
+
+test("a server's bundle post says how many members are watching a game in it, without naming anyone", async () => {
+    const { runBundleFeed, bundleFeedEmbed } = await import("../src/bundlefeed.js");
+    const { db } = rig();
+    db.ensureUser("u1"); db.ensureUser("u2"); db.ensureUser("u3");
+    for (const [id, g] of [["u1", "g1"], ["u2", "g1"], ["u3", "g2"]]) db.setUser?.(id, { guild_id: g }) ?? db.updateUser?.(id, { guild_id: g });
+    db.addItems("u1", [{ itad_id: "h", title: "Hades" }]); db.addItems("u2", [{ itad_id: "h", title: "Hades" }]); db.addItems("u3", [{ itad_id: "h", title: "Hades" }]);
+    const { watchersIn } = await import("../src/bundlematch.js");
+    assert.equal(watchersIn(db, "g1", { games: ["Hades"] }), 2);
+    assert.equal(watchersIn(db, "g2", { games: ["Hades"] }), 1);
+    assert.equal(watchersIn(db, "g1", { games: ["Celeste"] }), 0);
+    const e = bundleFeedEmbed({ store: "humble", title: "B", games: ["Hades"], game_count: 1, url: "https://x.example" }, { watchers: 2 });
+    assert.ok(e.embeds[0].fields.some(f => f.name === "On wishlists here" && /2 members/.test(f.value)));
+    assert.ok(!bundleFeedEmbed({ store: "humble", title: "B", games: [], url: "https://x.example" }).embeds[0].fields.some(f => f.name === "On wishlists here"));
+});

@@ -76,6 +76,15 @@ export async function runBundleMatch({ db, notifier, now = Date.now, log = () =>
     return stats;
 }
 
+/** How many members of a server have at least one game from this bundle on their wishlist. Only a number, never who. */
+export function watchersIn(db, guildId, bundle) {
+    const by = new Map();
+    for (const r of db.guildWishlistRows(guildId)) { if (!by.has(r.discord_id)) by.set(r.discord_id, []); by.get(r.discord_id).push(r); }
+    let n = 0;
+    for (const rows of by.values()) if (matchesIn(bundle.games, rows).length) n++;
+    return n;
+}
+
 /** For the dashboard: which of the listed bundles hold games from this person's wishlist. { bundleId: [titles] } */
 export function matchesForUser(db, userId, bundles) {
     const rows = db.userWishlistRows(userId), out = {};

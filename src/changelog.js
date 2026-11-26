@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.119", date: "2026-11-25", title: "Who's watching a bundle", items: [
+        "Bundle posts in a server now say how many members of that server have a game from the bundle on their wishlist. It's only a number, never names, and the line is left out when nobody does.",
+    ] },
     { version: "2026.11.118", date: "2026-11-25", title: "Bundle match", items: [
         "When a new bundle shows up with a game from your wishlist in it, you get a message about it: which of your games are inside, the price, when it ends and a button to the store. You only hear about bundles that have something you want, once each, and never more than three a day.",
         "The Bundles page marks those bundles with a star and the games they share with your wishlist, and has an On my wishlist filter.",

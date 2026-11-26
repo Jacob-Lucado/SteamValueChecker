@@ -1,5 +1,6 @@
 // The bundle feed: one post per bundle per server, grayed out when the bundle ends. Same rhythm as the game code posts.
 import { bundlePageUrl } from "./deallinks.js";
+import { watchersIn } from "./bundlematch.js";
 import { fetchAllBundles, BUNDLE_STORES, BUNDLE_STORE_KEYS } from "./bundlefeedsource.js";
 
 const sleepDefault = ms => new Promise(r => setTimeout(r, ms));
@@ -16,7 +17,7 @@ export const bundleFeedView = b => ({ id: b.id, store: b.store, storeName: BUNDL
     price: b.price, expiresAt: b.expires_at, status: b.status === "active" && b.expires_at && b.expires_at < Date.now() ? "expired" : b.status, firstSeen: b.first_seen });
 
 /** The post for one bundle. `expired` grays it out and drops the buttons. */
-export function bundleFeedEmbed(b, { expired = false } = {}) {
+export function bundleFeedEmbed(b, { expired = false, watchers = 0 } = {}) {
     const store = BUNDLE_STORES[b.store] ?? { name: b.store, emoji: "📦", color: 0x4da3ff, home: b.url };
     const count = b.game_count ?? (b.games?.length || null);
     const fields = [
@@ -29,6 +30,7 @@ export function bundleFeedEmbed(b, { expired = false } = {}) {
         const more = (count ?? b.games.length) - shown.length;
         fields.push({ name: "Featured games", value: shown.join("\n") + (more > 0 ? `\n*and ${more} more*` : ""), inline: false });
     }
+    if (!expired && watchers > 0) fields.push({ name: "On wishlists here", value: watchers === 1 ? "1 member of this server is watching a game in this bundle." : `${watchers} members of this server are watching a game in this bundle.`, inline: false });
     fields.push({ name: expired ? "Status" : "Ends", value: expired ? "This bundle has ended" : b.expires_at ? `<t:${unix(b.expires_at)}:F> (<t:${unix(b.expires_at)}:R>)` : "No end date listed, so grab it while it lasts", inline: false });
     const page = b.id ? bundlePageUrl(b.id) : null; // goes through the site first, which counts the visit and then sends people on to the store
     const embed = {
@@ -45,6 +47,7 @@ export function bundleFeedEmbed(b, { expired = false } = {}) {
     return { embeds: [embed], components: expired ? [] : [{ type: 1, components: buttons }], allowed_mentions: { parse: [] } };
 }
 
+const watchersFor = (db, gid, b) => { try { return watchersIn(db, gid, b); } catch { return 0; } };
 const wanted = (settings, b) => (!settings.stores.length || settings.stores.includes(b.store)) && (settings.adult || !b.adult);
 
 /** Newest-first active bundles this server should see and has not been sent yet. */
@@ -81,7 +84,7 @@ export async function runBundleFeed({ db, api, deep = false, fetchBundles = fetc
         const ping = settings.role_id ?? db.getCommunity?.(gid)?.ping_bundles ?? null;
         for (const b of [...toPost].reverse()) { // oldest first, so the newest ends up at the bottom
             try {
-                const msg = await api.sendMessage(settings.channel_id, { ...bundleFeedEmbed(b), content: ping ? `<@&${ping}>` : undefined, allowed_mentions: ping ? { roles: [ping] } : { parse: [] } });
+                const msg = await api.sendMessage(settings.channel_id, { ...bundleFeedEmbed(b, { watchers: watchersFor(db, gid, b) }), content: ping ? `<@&${ping}>` : undefined, allowed_mentions: ping ? { roles: [ping] } : { parse: [] } });
                 db.addFeedBundlePost(b.id, gid, settings.channel_id, msg?.id ?? null);
                 stats.posted++;
                 health?.ok("bundles", gid);
