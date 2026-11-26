@@ -119,10 +119,11 @@ export function bundleFeedStore({ run, get, all, clean, now }) {
     const wishlistTitleRows = () => all("SELECT discord_id, itad_id, title FROM items").map(clean);
     const userWishlistRows = id => all("SELECT itad_id, title FROM items WHERE discord_id = ?", id).map(clean);
     const guildWishlistRows = guildId => all("SELECT i.discord_id, i.itad_id, i.title FROM items i JOIN users u ON u.discord_id = i.discord_id WHERE u.guild_id = ?", guildId).map(clean);
+    const userLibraryRows = id => all("SELECT itad_id, title FROM library WHERE discord_id = ?", id).map(clean);
     const hasBundleMatch = (bundleId, id) => Boolean(get("SELECT 1 AS x FROM bundle_matches WHERE bundle_id = ? AND discord_id = ?", bundleId, id));
     const addBundleMatch = (bundleId, id, titles) => run("INSERT OR IGNORE INTO bundle_matches (bundle_id, discord_id, titles, notified_at) VALUES (?,?,?,?)", bundleId, id, JSON.stringify(titles ?? []), now());
     const countBundleMatchesSince = (id, since) => Number(get("SELECT COUNT(*) AS n FROM bundle_matches WHERE discord_id = ? AND notified_at >= ?", id, since)?.n ?? 0);
     const pruneBundleMatches = (before) => run("DELETE FROM bundle_matches WHERE notified_at < ?", before);
-    return { guildWishlistRows, wishlistTitleRows, userWishlistRows, hasBundleMatch, addBundleMatch, countBundleMatchesSince, pruneBundleMatches, upsertFeedBundle, getFeedBundle, listFeedBundles, expireDueBundles, expireMissingBundles, setFeedBundleStatus, pruneFeedBundles, feedBundlePost, addFeedBundlePost, hasAnyFeedBundlePost,
+    return { userLibraryRows, guildWishlistRows, wishlistTitleRows, userWishlistRows, hasBundleMatch, addBundleMatch, countBundleMatchesSince, pruneBundleMatches, upsertFeedBundle, getFeedBundle, listFeedBundles, expireDueBundles, expireMissingBundles, setFeedBundleStatus, pruneFeedBundles, feedBundlePost, addFeedBundlePost, hasAnyFeedBundlePost,
         markFeedBundlePostExpired, staleFeedBundlePosts, getBundleFeedSettings, setBundleFeedSettings, bundleFeedGuilds, bundleFeedCounts };
 }

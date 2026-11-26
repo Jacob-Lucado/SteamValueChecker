@@ -21,7 +21,7 @@ export function matchesIn(bundleGames, wishlistRows) {
     return out;
 }
 
-export function bundleMatchEmbed(b, matches, { origin = null } = {}) {
+export function bundleMatchEmbed(b, matches, { owned = 0 } = {}) {
     const store = BUNDLE_STORES[b.store] ?? { name: b.store, emoji: "📦", color: 0x4da3ff, home: b.url };
     const n = matches.length;
     const shown = matches.slice(0, 8).map(m => `• **${m.title}**`).join("\n") + (n > 8 ? `\n*and ${n - 8} more*` : "");
@@ -34,7 +34,7 @@ export function bundleMatchEmbed(b, matches, { origin = null } = {}) {
             url: page,
             description: `**${b.title}**${b.price ? ` · ${b.price}` : ""}\n${shown}`,
             fields: [
-                ...(b.games?.length ? [{ name: "In total", value: `${b.game_count ?? b.games.length} games`, inline: true }] : []),
+                ...(b.games?.length ? [{ name: "In total", value: `${b.game_count ?? b.games.length} games` + (owned > 0 ? `, ${owned} already in your library` : ""), inline: true }] : []),
                 { name: "Ends", value: b.expires_at ? `<t:${Math.floor(b.expires_at / 1000)}:R>` : "No end date listed", inline: true },
                 { name: "Worth a look", value: "Bundles often undercut buying each game alone, but check the tiers: the games you want may sit in a higher one.", inline: false }
             ],
@@ -67,7 +67,7 @@ export async function runBundleMatch({ db, notifier, now = Date.now, log = () =>
             if (db.countBundleMatchesSince(id, now() - DAY) >= CAP_PER_DAY) { stats.skipped++; continue; }
             db.addBundleMatch(b.id, id, m.map(x => x.title)); // recorded first, so a slow send can never double up
             try {
-                const r = await notifier.deliver(user, bundleMatchEmbed(b, m), "bundle", { bundleId: b.id });
+                const r = await notifier.deliver(user, bundleMatchEmbed(b, m, { owned: matchesIn(b.games, db.userLibraryRows(id)).length }), "bundle", { bundleId: b.id });
                 if (r?.ok) stats.sent++; else { stats.failed++; log(`bundle match for ${id}: ${r?.reason ?? "not delivered"}`); }
             } catch (e) { stats.failed++; log(`bundle match for ${id}: ${e.message}`); }
         }
@@ -83,6 +83,14 @@ export function watchersIn(db, guildId, bundle) {
     let n = 0;
     for (const rows of by.values()) if (matchesIn(bundle.games, rows).length) n++;
     return n;
+}
+
+/** For the dashboard: which games of each listed bundle this person already owns. { bundleId: [titles] } */
+export function ownedForUser(db, userId, bundles) {
+    const rows = db.userLibraryRows(userId), out = {};
+    if (!rows.length) return out;
+    for (const b of bundles) { const m = matchesIn(b.games, rows); if (m.length) out[b.id] = m.map(x => x.title); }
+    return out;
 }
 
 /** For the dashboard: which of the listed bundles hold games from this person's wishlist. { bundleId: [titles] } */

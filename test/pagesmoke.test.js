@@ -875,6 +875,7 @@ test("the Bundles page stars bundles with a wishlist game and filters to them", 
         o.db.addItems("u1", [{ itad_id: "h", title: "Hades" }]);
         const mk = (n, games) => ({ key: `humble:b${n}`, store: "humble", title: "Bundle " + n, url: `https://example.com/b${n}`, image: null, games, gameCount: games.length, price: "$5", expiresAt: null, seenAt: Date.now() });
         o.db.upsertFeedBundle(mk(1, ["Hades", "Hollow Knight"])); o.db.upsertFeedBundle(mk(2, ["Celeste", "Tunic"]));
+        o.db.upsertLibrary("u1", [{ itad_id: "c", title: "Celeste", paid: null }]);
         const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
         await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
         const page = await ctx.newPage();
@@ -883,6 +884,7 @@ test("the Bundles page stars bundles with a wishlist game and filters to them", 
         await page.goto(`${o.base}/bundles`, { waitUntil: "load" });
         await page.getByText("Bundle 2").first().waitFor({ timeout: 20_000 });
         assert.equal(await page.getByText("★ On your wishlist: Hades").count(), 1, "only the bundle with Hades is starred");
+        assert.equal(await page.getByText("You already own 1 of 2, so 1 would be new").count(), 1, "the owned count shows on the bundle with Celeste");
         assert.equal(await page.locator("a[href='/b/1/go']").count() > 0, true, "the open button goes through the site's own redirect");
         await page.getByRole("button", { name: "On my wishlist (1)" }).evaluate(el => el.click());
         await page.waitForTimeout(300);

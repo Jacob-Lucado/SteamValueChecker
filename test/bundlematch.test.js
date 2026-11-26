@@ -80,3 +80,16 @@ test("a server's bundle post says how many members are watching a game in it, wi
     assert.ok(e.embeds[0].fields.some(f => f.name === "On wishlists here" && /2 members/.test(f.value)));
     assert.ok(!bundleFeedEmbed({ store: "humble", title: "B", games: [], url: "https://x.example" }).embeds[0].fields.some(f => f.name === "On wishlists here"));
 });
+
+test("bundles say how many of their games you already own", async () => {
+    const { ownedForUser } = await import("../src/bundlematch.js");
+    const { db, sent, notifier } = rig();
+    db.ensureUser("u1");
+    db.addItems("u1", [{ itad_id: "h", title: "Hades" }]);
+    db.upsertLibrary("u1", [{ itad_id: "c", title: "Celeste", paid: null }, { itad_id: "t", title: "Tunic™", paid: null }]);
+    const id = db.upsertFeedBundle(mk(1, ["Hades", "Celeste", "Tunic", "Other"])).id;
+    assert.deepEqual(ownedForUser(db, "u1", db.listFeedBundles({ status: "active" })), { [id]: ["Celeste", "Tunic"] });
+    assert.deepEqual(ownedForUser(db, "nobody", db.listFeedBundles({ status: "active" })), {});
+    await runBundleMatch({ db, notifier });
+    assert.match(sent[0].payload.embeds[0].fields[0].value, /4 games, 2 already in your library/);
+});
