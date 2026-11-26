@@ -110,6 +110,14 @@
         const t = d.totals, cur = d.currency;
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
         const snaps = d.snapshots;
+        const b = d.buyer;
+        const buyer = b && b.grade
+          ? h("div", { class: "panel buyer-grade" }, h("h3", { text: "Your buyer grade" }),
+              h("div", { class: "row" }, h("div", { class: "tile" }, h("div", { class: "k", text: "Grade" }), h("div", { class: "v", text: b.grade }), h("div", { class: "s", text: `${b.score} out of 100` })),
+                h("div", {}, h("p", { text: b.line }),
+                  h("p", { class: "muted small", text: `${b.perfect} of ${b.graded} games were bought at their lowest price ever.` + (b.lost > 0 ? ` Waiting for the bottom would have saved about ${money(b.lost, cur)}.` : "") }),
+                  b.worst.length ? h("p", { class: "muted small", text: "Furthest from the floor: " + b.worst.map(x => `${x.title} (paid ${money(x.paid, cur)}, lowest ${money(x.atl, cur)})`).join("; ") }) : null)))
+          : b ? h("p", { class: "muted small", text: `Your buyer grade shows up once ${b.need} games have a price you paid (you have ${b.graded}). It compares what you paid with the lowest price ever.` }) : null;
         const chart = snaps.length > 1
           ? h("div", { class: "panel" }, h("h3", { text: "Value over time" }), lineChart([
               { name: "Worth at MSRP", cls: "s1", points: snaps.map(x => ({ x: Date.parse(x.day), y: x.msrp })) },
@@ -299,7 +307,7 @@
           nextOut,
           t.backlogGames ? forecastPanel() : "",
           newsPanel(),
-          challengePanel(), badgesPanel(), spendPanel(), bundlesPanel(() => load()), chart, backlogChart || "",
+          challengePanel(), badgesPanel(), spendPanel(), bundlesPanel(() => load()), buyer || "", chart, backlogChart || "",
           h("div", { class: "panel" }, libHead, h("div", { class: "library-controls" }, search, statusFilter, sortBy), filterPanel, bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }

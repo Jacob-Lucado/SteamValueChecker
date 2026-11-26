@@ -1,5 +1,6 @@
 // The game library's API.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
+import { buyerGrade } from "../buyergrade.js";
 import { HttpError } from "./http.js";
 import { MAX_GOAL, challengeView, monthKey } from "../challenge.js";
 import { MAX_UPLOAD_CHARS } from "../value.js";
@@ -26,6 +27,7 @@ export function createLibraryRoutes(ctx) {
                 r.genres = (t?.genres ?? []).slice(0, 4);
                 r.coop = (t?.cats ?? []).some(c => /co-op/i.test(c)); // from Steam's own categories, for the co-op filter
             }
+            v.buyer = buyerGrade(v.rows);
             return v;
         },
         "POST /api/library/add": async (req, body) => {

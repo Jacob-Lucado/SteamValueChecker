@@ -4370,3 +4370,13 @@ test("alert wins: the panel numbers and the share card come from the member's ow
         assert.match(c.image, /^data:image\/png;base64,/);
     } finally { await o.close(); }
 });
+
+test("library: the buyer grade compares what was paid with the lowest price ever", async () => {
+    const t = await signedIn();
+    try {
+        assert.equal((await t.request("/api/library")).data.buyer.grade, null, "no grade for an empty library");
+        t.db.upsertLibrary("u1", ["a", "b", "c", "d", "e"].map((x, n) => ({ itad_id: "g" + x, title: "Game " + x, paid: n < 3 ? 5 : 20 })));
+        const b = (await t.request("/api/library")).data.buyer; // the test store says the lowest ever is 5
+        assert.equal(b.graded, 5); assert.equal(b.perfect, 3); assert.equal(b.score, Math.round((300 + 30) / 5)); assert.equal(b.grade, "C"); assert.equal(b.lost, 30);
+    } finally { await t.close(); }
+});

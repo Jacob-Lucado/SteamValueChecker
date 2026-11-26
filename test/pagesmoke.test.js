@@ -918,3 +918,24 @@ test("the Alerts page shows Alert wins once an alert was followed by owning the 
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the Library page shows the buyer grade once enough games have a price", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        o.db.upsertLibrary("u1", ["a", "b", "c", "d", "e"].map((x, n) => ({ itad_id: "g" + x, title: "Game " + x, paid: n < 3 ? 5 : 20 })));
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/library`, { waitUntil: "load" });
+        await page.getByText("Your buyer grade").waitFor({ timeout: 20_000 });
+        assert.equal(await page.getByText("3 of 5 games were bought at their lowest price ever.").count(), 1);
+        assert.equal(await page.locator(".buyer-grade .v").innerText(), "C");
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});
