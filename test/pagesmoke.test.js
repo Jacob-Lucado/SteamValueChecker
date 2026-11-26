@@ -933,7 +933,7 @@ test("the Library page shows the buyer grade once enough games have a price", { 
         await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
         const errors = []; page.on("pageerror", e => errors.push(e.message));
         await page.goto(`${o.base}/library`, { waitUntil: "load" });
-        await page.getByText("Your buyer grade").waitFor({ timeout: 20_000 });
+        await page.locator(".buyer-grade h3").waitFor({ timeout: 20_000 });
         assert.equal(await page.getByText("3 of 5 games were bought at their lowest price ever.").count(), 1);
         assert.equal(await page.locator(".buyer-grade .v").innerText(), "C");
         assert.deepEqual(errors, []);
