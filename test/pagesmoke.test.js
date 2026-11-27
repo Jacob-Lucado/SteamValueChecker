@@ -944,3 +944,32 @@ test("the Library page shows the buyer grade once enough games have a price", { 
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the Looking for group page starts a buy pact and lets you join and cancel it", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createPactService } = await import("../src/pact.js");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}` }, extra: db => ({ botGuilds: () => true, pact: createPactService({ db, itad: { lookupTitles: async ([x]) => [{ id: "id-p", matched: x, exact: true }], getPrices: async ids => new Map(ids.map(id => [id, { id, deals: [{ shop: { name: "Steam" }, price: { amount: 30, currency: "USD" }, regular: { amount: 40, currency: "USD" }, cut: 25 }] }])) }, discord: { post: async () => ({ id: "m1" }), edit: async () => {} } }) }) });
+    try {
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/lfg`, { waitUntil: "load" });
+        await page.getByText("🤝 Buy pacts").waitFor({ timeout: 20_000 });
+        await page.getByLabel("Game", { exact: true }).last().fill("Helldivers 2");
+        await page.getByLabel("Target price").fill("20");
+        await page.locator(".pacts select option").first().waitFor({ state: "attached", timeout: 10_000 });
+        await page.getByRole("button", { name: "Start a pact" }).evaluate(el => el.click());
+        await page.locator(".pact-row", { hasText: "Helldivers 2" }).waitFor({ timeout: 10_000 });
+        assert.match(await page.locator(".pact-row").innerText(), /at \$20\.00 · 1 in, 2 needed/);
+        await page.locator(".pact-row").getByRole("button", { name: "Leave" }).evaluate(el => el.click());
+        await page.locator(".pact-row").getByRole("button", { name: "I'm in" }).waitFor({ timeout: 10_000 });
+        await page.locator(".pact-row").getByRole("button", { name: "Cancel" }).evaluate(el => el.click());
+        await page.getByText("No open pacts.").waitFor({ timeout: 10_000 });
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});

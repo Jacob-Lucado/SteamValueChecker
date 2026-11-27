@@ -4393,3 +4393,22 @@ test("alert wins: a yearly goal can be set, shown with progress and cleared", as
         assert.equal((await o.request("/api/alerts/wins/goal", { method: "POST", body: { amount: null } })).data.goal.goal, null);
     } finally { await o.close(); }
 });
+
+test("buy pacts from the dashboard: any member can start, join and cancel, and other servers are walled off", async () => {
+    const { createPactService } = await import("../src/pact.js");
+    const posts = [];
+    const t = await signedIn({ extra: (db, itad) => ({ pact: createPactService({ db, itad: { lookupTitles: async ([x]) => [{ id: "id-pact", matched: x, exact: true }], getPrices: async ids => new Map(ids.map(id => [id, { id, deals: [{ shop: { name: "Steam" }, price: { amount: 30, currency: "USD" }, regular: { amount: 40, currency: "USD" }, cut: 25 }] }])) }, discord: { post: async (c, p) => { posts.push({ c, p }); return { id: "m1" }; }, edit: async () => {} } }) }) });
+    const ok = await t.request("/api/pacts", { method: "POST", body: { guild_id: "g-member", channel_id: "c2", game: "Deep Rock", price: 20, players: 3 } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.data)); assert.equal(ok.data.now.price, 30); assert.equal(posts[0].c, "c2");
+    assert.equal((await t.request("/api/pacts", { method: "POST", body: { guild_id: "g-member", channel_id: "nope", game: "X", price: 20 } })).status, 400, "only the server's own channels");
+    assert.equal((await t.request("/api/pacts", { method: "POST", body: { guild_id: "g-member", channel_id: "c2", game: "X", price: 35 } })).status, 400, "already at that price");
+    const list = (await t.request("/api/pacts?guild=g-member")).data.pacts;
+    assert.equal(list.length, 1); assert.deepEqual([list[0].need, list[0].count, list[0].joined, list[0].canCancel], [3, 1, true, true]);
+    const id = ok.data.id;
+    assert.equal((await t.request("/api/pacts/leave", { method: "POST", body: { guild_id: "g-member", id } })).status, 200);
+    assert.equal((await t.request("/api/pacts/join", { method: "POST", body: { guild_id: "g-member", id } })).data.result, "joined");
+    assert.equal((await t.request("/api/pacts/join", { method: "POST", body: { guild_id: "g-admin", id } })).status, 404, "a pact from another server is not found");
+    assert.equal((await t.request("/api/pacts/cancel", { method: "POST", body: { guild_id: "g-member", id } })).status, 200);
+    assert.equal((await t.request("/api/pacts?guild=g-member")).data.pacts.length, 0);
+    await t.close();
+});

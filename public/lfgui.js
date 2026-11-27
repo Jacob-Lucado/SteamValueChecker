@@ -8,8 +8,35 @@
     const out = h("div", { class: "muted", text: "Loading…" });
     const form = h("div");
     const guild = serverPicker(servers);
+    const pactBox = h("div", { class: "panel pacts" });
+    async function loadPacts() {
+      try {
+        const d = await api("/api/pacts?guild=" + encodeURIComponent(guild.value));
+        const game = h("input", { type: "text", maxlength: "80", placeholder: "Game", "aria-label": "Game" });
+        const price = h("input", { type: "number", min: "0.5", step: "0.01", placeholder: "Price", "aria-label": "Target price" });
+        const players = h("input", { type: "number", min: "2", max: "20", value: "2", "aria-label": "Players needed" });
+        const chan = select([["", "Loading channels…"]], "");
+        api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).then(c => { chan.replaceChildren(...c.channels.map(x => h("option", { value: x.id, text: "#" + x.name }))); }).catch(() => {});
+        const start = h("button", { class: "btn blue", type: "button", text: "Start a pact" });
+        start.addEventListener("click", () => busy(start, async () => {
+          const r = await api("/api/pacts", { guild_id: guild.value, channel_id: chan.value, game: game.value, price: Number(price.value), players: Number(players.value) });
+          toast("Pact started." + (r.now ? ` It is ${r.now.price} at ${r.now.shop} right now.` : ""), "ok"); loadPacts();
+        }));
+        const act = async (p, path, msg) => { try { await api(path, { guild_id: guild.value, id: p.id }); toast(msg, "ok"); loadPacts(); } catch (e) { toast(e.message, "error"); } };
+        const money = (n, c) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: c }).format(n); } catch { return String(n); } };
+        pactBox.replaceChildren(h("h3", { text: "🤝 Buy pacts" }),
+          h("p", { class: "muted small", text: "Agree on a price with friends. Everyone who joins is pinged together when the game reaches it." }),
+          h("div", { class: "grid two" }, field("Game", game), field("Price (your region's currency)", price), field("Players needed before I ping", players), field("Channel", chan)), start,
+          ...(d.pacts.length ? d.pacts.map(p => h("div", { class: "pact-row" },
+            h("strong", { text: p.title }), h("span", { class: "muted", text: ` at ${money(p.target, p.currency)} · ${p.count} in, ${p.need} needed` }), " ",
+            h("button", { class: "btn green small", type: "button", text: p.joined ? "Leave" : "I'm in", onclick: () => act(p, p.joined ? "/api/pacts/leave" : "/api/pacts/join", p.joined ? "You left." : "You are in.") }),
+            p.canCancel ? h("button", { class: "btn red small", type: "button", text: "Cancel", onclick: () => act(p, "/api/pacts/cancel", "Cancelled.") }) : null,
+            p.url ? ext(p.url, "Open in Discord") : null)) : [h("p", { class: "muted small", text: "No open pacts. Start one above or with /games pact in Discord." })]));
+      } catch (e) { pactBox.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
     app.replaceChildren(pageHead("Looking for group", "Find people to play with. Members join with a button, and the group gets a reminder when it starts."),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, form, out));
+      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, form, out),
+      pactBox);
     async function load() {
       out.className = "muted"; out.replaceChildren("Loading…");
       try {
@@ -42,8 +69,8 @@
         }));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
-    guild.addEventListener("change", load);
-    load();
+    guild.addEventListener("change", () => { load(); loadPacts(); });
+    load(); loadPacts();
   }
   root.LfgUI = { view };
 })(window);

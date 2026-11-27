@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.127", date: "2026-11-26", title: "Buy pacts", items: [
+        "New `/games pact`: pick a game and a price, and friends join with a button. The moment the game reaches that price, everyone in the pact is pinged together, so a group can buy a co-op game on the same day.",
+        "You choose how many people must be in before it goes off. If the price drops early with too few players, the host gets one heads-up so they can rally friends. Pacts quietly end after 45 days.",
+        "You can start, join, leave and cancel pacts from the Looking for group page on the dashboard too. `/server lfg list` shows the open ones.",
+    ] },
     { version: "2026.11.126", date: "2026-11-26", title: "Savings goal", items: [
         "On the Alerts page you can set a yearly savings goal for Alert wins. It shows a progress bar for the year and sends you a card when you reach it.",
         "Alert wins are now kept for good. Before, they could only reach back as far as the 90 days of alert history.",

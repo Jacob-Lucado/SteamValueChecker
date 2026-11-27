@@ -9,7 +9,7 @@ import { gameNight } from "../gamenight.js";
 import { whoIsPlaying } from "../nowplaying.js";
 
 export function createPlayRoutes(ctx) {
-    const { botGuilds, calendar, cooldown, db, dm, guildFor, hilo, isManager, isOwner, itad, lfg, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow } = ctx;
+    const { botGuilds, calendar, cooldown, db, dm, guildFor, hilo, isManager, isOwner, itad, lfg, pact, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow } = ctx;
     return {
         // Game night on the dashboard: pick opted-in members of a server and see what they can play and buy together.
         "GET /api/gamenight/members": async (req, _b, url) => {
@@ -162,6 +162,54 @@ export function createPlayRoutes(ctx) {
             const p = db.getLfg(Number(body.id));
             if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that post.");
             await lfg.close(p.id, s.userId, { canManage: isManager(g) });
+            return { ok: true };
+        },
+        // Buy pacts: any member can start one, like /games pact in Discord
+        "GET /api/pacts": async (req, _b, url) => {
+            const s = session(req);
+            const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            const pacts = db.listPactsGuild(g.id);
+            return { pacts: pacts.map(p => {
+                const members = db.pactMembers(p.id);
+                return { id: p.id, title: p.title, target: p.target, currency: p.currency, need: p.min_players, count: members.length, joined: members.includes(s.userId), canCancel: p.creator_id === s.userId || isManager(g), expires_at: p.expires_at, url: p.message_id ? `https://discord.com/channels/${p.guild_id}/${p.channel_id}/${p.message_id}` : null };
+            }) };
+        },
+        "POST /api/pacts": async (req, body) => {
+            const s = session(req);
+            if (!pact) throw new HttpError(503, "Buy pacts are not available.");
+            const g = guildFor(s, String(body.guild_id));
+            let channels;
+            try { channels = await rest.listChannels(g.id); } catch { throw new HttpError(400, "The bot is not in that server yet. Invite it first."); }
+            const channelId = String(body.channel_id ?? "");
+            if (!channels.some(c => c.id === channelId)) throw new HttpError(400, "Pick one of the server's text channels.");
+            cooldown(s.userId, "pact");
+            const r = await pact.create({ guildId: g.id, channelId, creatorId: s.userId, title: body.game, target: body.price, minPlayers: body.players ?? 2, country: userRow(s)?.region || "US" });
+            return { id: r.pact.id, now: r.now };
+        },
+        "POST /api/pacts/join": async (req, body) => {
+            const s = session(req);
+            if (!pact) throw new HttpError(503, "Buy pacts are not available.");
+            const g = guildFor(s, String(body.guild_id));
+            const p = db.getPact(Number(body.id));
+            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that pact.");
+            return { result: (await pact.join(p.id, s.userId)).result };
+        },
+        "POST /api/pacts/leave": async (req, body) => {
+            const s = session(req);
+            if (!pact) throw new HttpError(503, "Buy pacts are not available.");
+            const g = guildFor(s, String(body.guild_id));
+            const p = db.getPact(Number(body.id));
+            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that pact.");
+            await pact.leave(p.id, s.userId);
+            return { ok: true };
+        },
+        "POST /api/pacts/cancel": async (req, body) => {
+            const s = session(req);
+            if (!pact) throw new HttpError(503, "Buy pacts are not available.");
+            const g = guildFor(s, String(body.guild_id));
+            const p = db.getPact(Number(body.id));
+            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that pact.");
+            await pact.cancel(p.id, s.userId, { canManage: isManager(g) });
             return { ok: true };
         },
         "GET /api/coop": async (req, _b, url) => {
