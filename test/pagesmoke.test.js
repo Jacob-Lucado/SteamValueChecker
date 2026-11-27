@@ -814,11 +814,18 @@ test("For you cards link the title to the game page and the card to the store", 
         const page = await ctx.newPage();
         await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
         const errors = []; page.on("pageerror", e => errors.push(e.message));
+        // A library of ten Action games, only three of them played, so the card can forecast hours.
+        o.db.syncSteamGames("u1", Array.from({ length: 10 }, (_, i) => ({ itad_id: "lib" + i, title: "Lib " + i, appid: 9000 + i, minutes: i < 3 ? 1200 : 0, lastPlayed: null })), { track: false });
+        for (let i = 0; i < 10; i++) o.db.saveAppTags(9000 + i, ["Action"], []);
+        o.db.saveAppTags(4242, ["Action"], []);
         await page.goto(`${o.base}/foryou`, { waitUntil: "load" });
         const title = page.getByRole("link", { name: "Gamma Deluxe", exact: true });
         await title.waitFor({ timeout: 20_000 });
         assert.match(await title.getAttribute("href"), /\/g\/zz1$/);
         assert.match(await page.getByRole("link", { name: /Open Gamma Deluxe in the store/ }).getAttribute("href"), /^https:\/\//);
+        const hrs = page.locator(".fy-hours");
+        await hrs.waitFor({ timeout: 10_000 });
+        assert.match(await hrs.innerText(), /About 6h for you · 1\.67 USD an hour · .*often unplayed/);
         assert.deepEqual(errors, []);
         await ctx.close();
     } finally { await browser.close(); await o.close(); }

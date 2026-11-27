@@ -4,6 +4,8 @@
 import { summarize } from "./report.js";
 import { alertColor } from "./supporters.js";
 import { tasteProfile, matchScore } from "./taste.js";
+import { yourHours, hoursLine } from "./yourhours.js";
+import { money as fmtMoney } from "./render.js";
 import { evaluate, describeTrigger, dealVerdict, meaningfulDrop } from "./alerts.js";
 import { protonTier } from "./proton.js";
 import { steamReviews } from "./reviews.js";
@@ -130,8 +132,9 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 try { h.insight = priceInsight(await itad.getHistory?.(h.item.itad_id, h.item.region ?? "US"), h.now.price, { now: now(), money: n => `${n.toFixed(2)} ${h.now.currency ?? "USD"}` }); }
                 catch { h.insight = null; }
                 try { h.match = h.item.appid ? matchScore(profile, db.getAppTags([h.item.appid]).get(h.item.appid)) : null; } catch { h.match = null; }
-                h.proton = await protonTier(h.item.appid).catch(() => null);
                 const hide = hiddenFacts(user);
+                try { h.hours = h.item.appid && !hide.includes("time") ? hoursLine(yourHours(db, userId, db.getAppTags([h.item.appid]).get(h.item.appid), { price: h.now.price }), n => fmtMoney(n, h.now.currency ?? "USD")) : null; } catch { h.hours = null; }
+                h.proton = await protonTier(h.item.appid).catch(() => null);
                 h.reviews = hide.includes("reviews") ? null : await steamReviews(h.item.appid).catch(() => null);
                 h.facts = withoutHidden(await gameFacts(h.item.appid), hide, user.lang);
             }));

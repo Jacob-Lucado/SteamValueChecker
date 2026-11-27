@@ -3,6 +3,7 @@
 import { tasteProfile } from "./taste.js";
 import { refreshTags } from "./taste.js";
 import { summarize } from "./report.js";
+import { yourHours } from "./yourhours.js";
 
 /**
  * Returns { deals, pending, currency, genres }. `pending` is how many candidate games still lack genres (the page asks again).
@@ -36,8 +37,10 @@ export async function forYou({ db, itad, userId, user, fetchImpl = globalThis.fe
         const match = genres.length && profile.genres.length ? Math.min(99, Math.round(50 + 49 * Math.min(1, fit))) : null;
         const atl = sum.atl !== null && price <= sum.atl * 1.001;
         const wishlist = wish.has(d.id);
+        let hours = null;
+        try { const f = yourHours(db, userId, tags.get(d.appid), { price }); hours = f ? { n: f.n, played: f.played, expected: f.expected, perHour: f.perHour, risk: f.risk } : null; } catch { hours = null; }
         deals.push({
-            id: d.id, title: d.title, appid: d.appid, match, cut, price, regular, currency: sum.currency ?? d.currency, shop: sum.best?.shop ?? "Steam",
+            id: d.id, hours, title: d.title, appid: d.appid, match, cut, price, regular, currency: sum.currency ?? d.currency, shop: sum.best?.shop ?? "Steam",
             url: sum.best?.url ?? d.url, atl, wishlist, genres: genres.slice(0, 3),
             rank: (match ?? 55) * 0.6 + Math.min(cut, 90) * 0.3 + (atl ? 8 : 0) + (wishlist ? 10 : 0)
         });

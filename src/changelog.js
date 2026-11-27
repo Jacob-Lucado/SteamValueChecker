@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.128", date: "2026-11-26", title: "Your hours", items: [
+        "Sale alerts and the For you page now forecast how many hours you would really get out of a game. It looks at the games in your library with the same genres, counts how many you actually played, and works out the price per hour of your own playing.",
+        "If you tend to leave that kind of game unplayed, it says so, so a 70% off sale on something you will never open does not tempt you. It needs a synced Steam library, and you can hide it with the Time to finish and cost per hour switch.",
+    ] },
     { version: "2026.11.127", date: "2026-11-26", title: "Buy pacts", items: [
         "New `/games pact`: pick a game and a price, and friends join with a button. The moment the game reaches that price, everyone in the pact is pinged together, so a group can buy a co-op game on the same day.",
         "You choose how many people must be in before it goes off. If the price drops early with too few players, the host gets one heads-up so they can rally friends. Pacts quietly end after 45 days.",

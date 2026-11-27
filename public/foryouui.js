@@ -29,7 +29,8 @@
         h("div", { class: "fy-info" },
           h("a", { class: "fy-title game-link", href: "#/g/" + encodeURIComponent(d.id), text: d.title }),
           h("span", { class: "muted small", text: d.shop + (d.atl ? " · all-time low" : "") + (d.wishlist ? " · on your wishlist" : "") }),
-          d.genres.length ? h("span", { class: "fy-genres", text: d.genres.join(" · ") }) : null),
+          d.genres.length ? h("span", { class: "fy-genres", text: d.genres.join(" · ") }) : null,
+          d.hours ? h("span", { class: "fy-hours muted small", title: `You own ${d.hours.n} games like this and played ${d.hours.played} of them.`, text: `⏱️ About ${d.hours.expected}h for you` + (d.hours.perHour ? ` · ${d.hours.perHour.toFixed(2)} ${d.currency || ""} an hour` : "") + (d.hours.risk ? " · ⚠️ often unplayed" : "") }) : null),
         h("a", { class: "fy-price fy-store", href: d.url && /^https:\/\//.test(d.url) ? d.url : "#/foryou", target: "_blank", rel: "noopener noreferrer", "aria-label": "Open " + d.title + " in the store" }, h("span", { class: "fy-cut", text: "-" + d.cut + "%" }), h("b", { text: money(d.price, cur) }), h("s", { text: money(d.regular, cur) })));
       const prev = h("button", { class: "pg-btn wide", text: "‹ Prev", onclick: () => { st.page--; draw(); host.scrollIntoView({ block: "start" }); } }); prev.disabled = st.page === 0;
       const next = h("button", { class: "pg-btn wide", text: "Next ›", onclick: () => { st.page++; draw(); host.scrollIntoView({ block: "start" }); } }); next.disabled = st.page >= pages - 1;

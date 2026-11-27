@@ -141,7 +141,7 @@ const LEVEL = {
  * One sale alert. `now` comes from alerts.current(). `art` is "image" (large, for a single alert),
  * "thumbnail" (small, when several alerts share a message) or null.
  */
-export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null, insight = null, proton = null, reviews = null, match = null, facts = null } = {}) {
+export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null, insight = null, proton = null, reviews = null, match = null, hours = null, facts = null } = {}) {
     const c = now.currency ?? "USD";
     const pct = Math.round((now.discount ?? 0) * 100);
     const lvl = LEVEL[verdict?.level] ?? LEVEL.info;
@@ -153,6 +153,7 @@ export function alertEmbed(item, now, { trigger, lower = false, verdict = null, 
         { name: "Discount", value: pct > 0 ? `${pct}% off` : "-", inline: true }
     ];
     if (match) fields.push({ name: "🎯 Match for you", value: `**${match.pct}%**${match.matched.length ? ` · fits your ${match.matched.join(" and ")} games` : ""}`, inline: false });
+    if (hours) fields.push({ name: "⏱️ Your hours", value: hours, inline: false });
     if (now.atl !== null) fields.push({ name: "All-time low", value: money(now.atl, c), inline: true });
     const ends = saleEnds(now.expiry);
     if (ends) lines.push(ends);
@@ -195,7 +196,7 @@ export function alertButtons(item, now, { single = true, lang = "en" } = {}) {
 /** A whole alert message for one member: up to 5 games, each with its art and its own buttons. */
 export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null, color = null }) {
     const single = hits.length === 1;
-    const embedFor = (h, one) => ({ ...alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: one ? "image" : "thumbnail", insight: h.insight ?? null, match: h.match ?? null, proton: h.proton ?? null, reviews: h.reviews ?? null, facts: h.facts ?? null }), ...(color != null ? { color } : {}) });
+    const embedFor = (h, one) => ({ ...alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: one ? "image" : "thumbnail", insight: h.insight ?? null, match: h.match ?? null, hours: h.hours ?? null, proton: h.proton ?? null, reviews: h.reviews ?? null, facts: h.facts ?? null }), ...(color != null ? { color } : {}) });
     const rowsFor = (h, one) => [alertButtons(h.item, h.now, { single: one, lang }),
         ...(one && h.item.id != null ? [{ type: 1, components: [
             { type: 2, style: 2, label: tr(lang, "Snooze 7 days"), custom_id: `${SNOOZE_ID}:${h.item.id}` },
