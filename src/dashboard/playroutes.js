@@ -9,7 +9,7 @@ import { gameNight } from "../gamenight.js";
 import { whoIsPlaying } from "../nowplaying.js";
 
 export function createPlayRoutes(ctx) {
-    const { botGuilds, calendar, cooldown, db, dm, guildFor, hilo, isManager, isOwner, itad, lfg, pact, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow } = ctx;
+    const { botGuilds, calendar, cooldown, db, dm, guildFor, hilo, isManager, isOwner, itad, lfg, pact, pledge, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow } = ctx;
     return {
         // Game night on the dashboard: pick opted-in members of a server and see what they can play and buy together.
         "GET /api/gamenight/members": async (req, _b, url) => {
@@ -210,6 +210,50 @@ export function createPlayRoutes(ctx) {
             const p = db.getPact(Number(body.id));
             if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that pact.");
             await pact.cancel(p.id, s.userId, { canManage: isManager(g) });
+            return { ok: true };
+        },
+        // Backlog pledges: same as /games pledge, plus the server board
+        "GET /api/pledges": async (req, _b, url) => {
+            const s = session(req);
+            const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            const lib = db.listLibrary(s.userId);
+            return {
+                linked: lib.length > 0,
+                pledges: db.listPledgesGuild(g.id).map(p => {
+                    const votes = db.pledgeVotes(p.id), mine = votes.find(v => v.user_id === s.userId)?.side ?? null;
+                    const minutes = db.listLibrary(p.user_id).find(x => x.itad_id === p.itad_id)?.minutes ?? p.base_minutes;
+                    return { id: p.id, title: p.title, hours: p.hours, done: Math.round(Math.max(0, minutes - p.base_minutes) / 6) / 10, due_at: p.due_at, backers: votes.filter(v => v.side === "back").length, doubters: votes.filter(v => v.side === "doubt").length, mine, own: p.user_id === s.userId, canCancel: p.user_id === s.userId || isManager(g), url: p.message_id ? `https://discord.com/channels/${p.guild_id}/${p.channel_id}/${p.message_id}` : null };
+                }),
+                board: await Promise.all(db.pledgeBoard(g.id, 10).map(async r => ({ ...r, name: (await rest.memberName(g.id, r.user_id).catch(() => null)) || "Member " + String(r.user_id).slice(-4) })))
+            };
+        },
+        "POST /api/pledges": async (req, body) => {
+            const s = session(req);
+            if (!pledge) throw new HttpError(503, "Pledges are not available.");
+            const g = guildFor(s, String(body.guild_id));
+            let channels;
+            try { channels = await rest.listChannels(g.id); } catch { throw new HttpError(400, "The bot is not in that server yet. Invite it first."); }
+            const channelId = String(body.channel_id ?? "");
+            if (!channels.some(c => c.id === channelId)) throw new HttpError(400, "Pick one of the server's text channels.");
+            const p = await pledge.create({ guildId: g.id, channelId, userId: s.userId, title: body.game, hours: body.hours, days: body.days ?? 14 });
+            cooldown(s.userId, "pledge");
+            return { id: p.id };
+        },
+        ...Object.fromEntries([["back", "back"], ["doubt", "doubt"]].map(([path, side]) => [`POST /api/pledges/${path}`, async (req, body) => {
+            const s = session(req);
+            if (!pledge) throw new HttpError(503, "Pledges are not available.");
+            const g = guildFor(s, String(body.guild_id));
+            const p = db.getPledge(Number(body.id));
+            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that pledge.");
+            return { result: (await pledge.vote(p.id, s.userId, side)).result };
+        }])),
+        "POST /api/pledges/cancel": async (req, body) => {
+            const s = session(req);
+            if (!pledge) throw new HttpError(503, "Pledges are not available.");
+            const g = guildFor(s, String(body.guild_id));
+            const p = db.getPledge(Number(body.id));
+            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that pledge.");
+            await pledge.cancel(p.id, s.userId, { canManage: isManager(g) });
             return { ok: true };
         },
         "GET /api/coop": async (req, _b, url) => {

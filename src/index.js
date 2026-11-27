@@ -102,7 +102,7 @@ import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
-import { runSteamAutoSync, fetchSteamCountry } from "./steamlib.js";
+import { runSteamAutoSync, fetchSteamCountry, syncSteamLibrary } from "./steamlib.js";
 import { runFamilySync } from "./family.js";
 import { runWishlistAutoSync } from "./wishlist.js";
 import { importWishlist } from "./steam.js";
@@ -121,6 +121,7 @@ import { createCalendarService } from "./calendar.js";
 import { createCalendarHandlers } from "./calendarhandlers.js";
 import { createLfgHandlers } from "./lfghandlers.js";
 import { createPactService } from "./pact.js";
+import { createPledgeService } from "./pledge.js";
 import { createDashboard, restrictedText } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
 import { createVault } from "./vault.js";
@@ -426,7 +427,8 @@ const twitchChat = createTwitchChat({ db, giveaways, streamGw, member: (g, u) =>
 client.once(Events.ClientReady, () => { if (giveaways && process.env.TWITCH_CHAT !== "off") twitchChat.start(); });
 const lfg = createLfgService({ db, discord: gwDiscord, log: m => console.log(`[lfg] ${m}`) });
 const pact = createPactService({ db, itad, discord: gwDiscord, log: m => console.log(`[pact] ${m}`) });
-const lfgUi = createLfgHandlers({ db, lfg, pact });
+const pledge = createPledgeService({ db, discord: gwDiscord, log: m => console.log(`[pledge] ${m}`), refresh: async userId => { const link = db.getSteamLink(userId); if (link?.steamid) await syncSteamLibrary({ db, itad, userId, steamid: link.steamid, apiKey: cfg.steamApiKey, achievements: false }); } });
+const lfgUi = createLfgHandlers({ db, lfg, pact, pledge });
 const calendar = createCalendarService({ db, discord: gwDiscord, log: m => console.log(`[calendar] ${m}`) });
 const clubUi = createClubHandlers({ db });
 const santaUi = createSantaHandlers({ db, itad, sendDm: (id, p) => discord.sendDm(id, p), nameOf: async id => { const u = await client.users.fetch(id).catch(() => null); return u ? (u.globalName || u.username) : `<@${id}>`; } });
@@ -470,6 +472,7 @@ client.once(Events.ClientReady, c => {
 
     // Support tickets: quiet ones resolve and close on their own
     sched(async () => { await calendar.tick(); }, 5 * 60_000, { onError: err => { console.error(`[calendar] ${err.name}: ${err.message}`); ops.error("calendar", err); } });
+    sched(async () => { await pledge.tick(); }, 30 * 60_000, { onError: err => { console.error(`[pledge] ${err.name}: ${err.message}`); ops.error("pledge", err); } });
     sched(async () => { await pact.tick(); }, 20 * 60_000, { onError: err => { console.error(`[pact] ${err.name}: ${err.message}`); ops.error("pact", err); } });
     sched(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
     sched(async () => { await pollBundles(); }, 30 * 60_000, { onError: err => { console.error(`[bundles] ${err.name}: ${err.message}`); ops.error("bundle feed", err); } });
@@ -1033,7 +1036,7 @@ async function onInteraction(i, again = false) {
     if (i.isButton() && i.customId.startsWith("gn_poll:")) return handlers.handleGameNightPoll(i);
     if (i.isButton() && i.customId.startsWith("gn_vote:")) return handlers.handlePollVote(i);
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
-    if (i.isButton() && (i.customId.startsWith("lfg_") || i.customId.startsWith("pact_"))) return lfgUi.handleButton(i);
+    if (i.isButton() && (i.customId.startsWith("lfg_") || i.customId.startsWith("pact_") || i.customId.startsWith("pledge_"))) return lfgUi.handleButton(i);
     if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);
     if (i.isButton() && i.customId === PROMO_OFF_ID) {
         db.ensureUser(i.user.id); db.updateUser(i.user.id, { promo_off: 1 }); db.bumpUsage("promo_opt_out");
@@ -1151,6 +1154,7 @@ async function onInteraction(i, again = false) {
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
             case "pact": return await lfgUi.handlePact(i);
+            case "pledge": return await lfgUi.handlePledge(i);
             case "fixmatch": return await handlers.handleFixMatch(i);
             case "features": return await handleFeaturesCommand(i, db);
             case "serverstats": return await handlers.handleServerStats(i);
@@ -1212,7 +1216,7 @@ const dashboard = createDashboard({ channelCheck: gid => clientInspector(client,
         const inv = await ch.createInvite({ maxAge: 3600, maxUses: 1, unique: true, reason: "Bot owner asked for an invite from the dashboard" });
         return inv.url;
     },
-    guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g), boosts: g.premiumSubscriptionCount ?? 0 })), lfg, pact, calendar, community, moderation, automod, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKey: cfg.anthropicKey, aiLite: true, aiKeyVault: keyVault, mainGuild, aiCheckKey: (k, o) => ai.checkKey(k, o), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+    guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g), boosts: g.premiumSubscriptionCount ?? 0 })), lfg, pact, pledge, calendar, community, moderation, automod, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKey: cfg.anthropicKey, aiLite: true, aiKeyVault: keyVault, mainGuild, aiCheckKey: (k, o) => ai.checkKey(k, o), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => { console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`); setTimeout(() => pingIndexNow({ origin: new URL(d.publicUrl).origin, db }), 30_000).unref(); })
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

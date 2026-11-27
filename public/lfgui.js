@@ -9,6 +9,7 @@
     const form = h("div");
     const guild = serverPicker(servers);
     const pactBox = h("div", { class: "panel pacts" });
+    const pledgeBox = h("div", { class: "panel pledges" });
     async function loadPacts() {
       try {
         const d = await api("/api/pacts?guild=" + encodeURIComponent(guild.value));
@@ -34,9 +35,33 @@
             p.url ? ext(p.url, "Open in Discord") : null)) : [h("p", { class: "muted small", text: "No open pacts. Start one above or with /games pact in Discord." })]));
       } catch (e) { pactBox.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
+    async function loadPledges() {
+      try {
+        const d = await api("/api/pledges?guild=" + encodeURIComponent(guild.value));
+        const game = h("input", { type: "text", maxlength: "80", placeholder: "A game you own", "aria-label": "Pledge game" });
+        const hrs = h("input", { type: "number", min: "1", max: "200", value: "10", "aria-label": "Hours to play" });
+        const days = h("input", { type: "number", min: "2", max: "60", value: "14", "aria-label": "Days to do it in" });
+        const chan = select([["", "Loading channels…"]], "");
+        api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).then(c => { chan.replaceChildren(...c.channels.map(x => h("option", { value: x.id, text: "#" + x.name }))); }).catch(() => {});
+        const go = h("button", { class: "btn blue", type: "button", text: "Make the pledge" });
+        go.addEventListener("click", () => busy(go, async () => { await api("/api/pledges", { guild_id: guild.value, channel_id: chan.value, game: game.value, hours: Number(hrs.value), days: Number(days.value) }); toast("Pledged. It's posted in the channel.", "ok"); loadPledges(); }));
+        const act = async (p, path, msg) => { try { await api(path, { guild_id: guild.value, id: p.id }); toast(msg, "ok"); loadPledges(); } catch (e) { toast(e.message, "error"); } };
+        pledgeBox.replaceChildren(h("h3", { text: "🎯 Backlog pledges" }),
+          h("p", { class: "muted small", text: "Promise some hours to a game you own. Friends back or doubt you, and I settle it from your real Steam playtime." }),
+          d.linked ? null : h("div", { class: "notice", text: "Link your Steam account first so I can see your playtime." }),
+          h("div", { class: "grid two" }, field("Game", game), field("Hours", hrs), field("Days", days), field("Channel", chan)), go,
+          ...(d.pledges.length ? d.pledges.map(p => h("div", { class: "pledge-row" },
+            h("strong", { text: p.title }), h("span", { class: "muted", text: ` ${p.done} / ${p.hours} h · due ${new Date(p.due_at).toLocaleDateString()} · ${p.backers} back, ${p.doubters} doubt` }), " ",
+            p.own ? null : h("button", { class: "btn green small", type: "button", text: p.mine === "back" ? "Backing" : "Back", onclick: () => act(p, "/api/pledges/back", "You back them.") }),
+            p.own ? null : h("button", { class: "btn small", type: "button", text: p.mine === "doubt" ? "Doubting" : "Doubt", onclick: () => act(p, "/api/pledges/doubt", "You doubt them.") }),
+            p.canCancel ? h("button", { class: "btn red small", type: "button", text: "Cancel", onclick: () => act(p, "/api/pledges/cancel", "Cancelled.") }) : null,
+            p.url ? ext(p.url, "Open in Discord") : null)) : [h("p", { class: "muted small", text: "No open pledges. Make one above or with /games pledge in Discord." })]),
+          d.board.length ? h("div", { class: "pledge-board" }, h("h4", { text: "🏆 Board" }), ...d.board.map((r, i) => h("div", { class: "muted small", text: `${i + 1}. ${r.name || r.user_id} · ${r.points} pts · ${r.kept} kept, ${r.failed} missed` }))) : null);
+      } catch (e) { pledgeBox.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
     app.replaceChildren(pageHead("Looking for group", "Find people to play with. Members join with a button, and the group gets a reminder when it starts."),
       h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, form, out),
-      pactBox);
+      pactBox, pledgeBox);
     async function load() {
       out.className = "muted"; out.replaceChildren("Loading…");
       try {
@@ -69,8 +94,8 @@
         }));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
-    guild.addEventListener("change", () => { load(); loadPacts(); });
-    load(); loadPacts();
+    guild.addEventListener("change", () => { load(); loadPacts(); loadPledges(); });
+    load(); loadPacts(); loadPledges();
   }
   root.LfgUI = { view };
 })(window);

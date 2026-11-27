@@ -156,6 +156,13 @@ const pactCmd = new SlashCommandBuilder()
     .addNumberOption(o => o.setName("price").setDescription("Ping everyone at or below this price").setRequired(true).setMinValue(0.5).setMaxValue(1000))
     .addIntegerOption(o => o.setName("players").setDescription("How many must be in before I ping (default 2)").setMinValue(2).setMaxValue(20));
 
+const pledgeCmd = new SlashCommandBuilder()
+    .setName("pledge")
+    .setDescription("Pledge hours to a game you own; no game shows the board")
+    .addStringOption(o => o.setName("game").setDescription("A game in your synced Steam library").setMaxLength(80))
+    .addIntegerOption(o => o.setName("hours").setDescription("How many more hours you will play").setMinValue(1).setMaxValue(200))
+    .addIntegerOption(o => o.setName("days").setDescription("Deadline in days (default 14)").setMinValue(2).setMaxValue(60));
+
 const calendarCmd = new SlashCommandBuilder()
     .setName("calendar")
     .setDescription("Coming up: game releases, Steam sales and server events")
@@ -981,7 +988,7 @@ const playerCmd = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, profileCmd, watch, fixmatch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, supporterCmd, mydata, help, about, vote, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
-    ...[alertchannel, features, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, coop, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh, rolemenuCmd, starboardCmd, suggestionsCmd, tagsCmd, pollCmd, suggestCmd, tagCmd, pactCmd].map(serverOnly),
+    ...[alertchannel, features, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, coop, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh, rolemenuCmd, starboardCmd, suggestionsCmd, tagsCmd, pollCmd, suggestCmd, tagCmd, pactCmd, pledgeCmd].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -990,7 +997,7 @@ export const commands = [
 // noisy list that way, so they are folded into a few grouped commands. The handlers still think in the old names:
 // legacyRoute() turns "/me wishlist add" back into ("wishlist", "add") before anything else runs.
 const HUBS = [
-    { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "fixmatch", "regions", "bundle", "sales", "freegames", "watch", "pact", "redeem"], groups: ["saleprep", "codes"] },
+    { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "fixmatch", "regions", "bundle", "sales", "freegames", "watch", "pact", "pledge", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
     { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "coop", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard", "suggest", "tag"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "features", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes", "rolemenu", "starboard", "suggestions", "tags", "poll"] },

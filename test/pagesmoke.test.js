@@ -980,3 +980,36 @@ test("the Looking for group page starts a buy pact and lets you join and cancel 
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the Looking for group page makes a backlog pledge from your library and shows it with the board", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createPledgeService } = await import("../src/pledge.js");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}` }, extra: db => ({ botGuilds: () => true, pledge: createPledgeService({ db, discord: { post: async () => ({ id: "m1" }), edit: async () => {} } }) }) });
+    try {
+        o.db.syncSteamGames("u1", [{ itad_id: "hades", title: "Hades", appid: 1145360, minutes: 300, lastPlayed: null }], { track: false });
+        // someone else already settled a pledge here, so the board has a row
+        const done = o.db.createPledge({ guild_id: "g-admin", channel_id: "c2", user_id: "u9", itad_id: "x", appid: 2, title: "Celeste", hours: 3, base_minutes: 0, due_at: Date.now() });
+        o.db.closePledge(done.id, "kept", 300);
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/lfg`, { waitUntil: "load" });
+        await page.getByText("🎯 Backlog pledges").waitFor({ timeout: 20_000 });
+        await page.locator(".pledge-board").waitFor({ timeout: 10_000 });
+        assert.match(await page.locator(".pledge-board").innerText(), /1\. .* · 10 pts · 1 kept, 0 missed/);
+        await page.getByLabel("Pledge game").fill("Hades");
+        await page.getByLabel("Hours to play").fill("5");
+        await page.locator(".pledges select option").first().waitFor({ state: "attached", timeout: 10_000 });
+        await page.getByRole("button", { name: "Make the pledge" }).evaluate(el => el.click());
+        await page.locator(".pledge-row", { hasText: "Hades" }).waitFor({ timeout: 10_000 });
+        assert.match(await page.locator(".pledge-row").innerText(), /0 \/ 5 h · due .* · 0 back, 0 doubt/);
+        await page.locator(".pledge-row").getByRole("button", { name: "Cancel" }).evaluate(el => el.click());
+        await page.getByText("No open pledges.").waitFor({ timeout: 10_000 });
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});

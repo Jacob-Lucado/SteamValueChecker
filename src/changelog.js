@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.129", date: "2026-11-27", title: "Backlog pledges", items: [
+        "New `/games pledge`: promise to play a number of hours of a game you own by a deadline. It posts a card with a progress bar, and friends tap back or doubt. When the hours are in, or time runs out, I check your real Steam playtime and call it.",
+        "Keeping your own pledge earns 10 points, and every right call from backers and doubters earns 3. Run `/games pledge` with no game to see the server board and your open pledges.",
+        "You can make, back, doubt and cancel pledges from the Looking for group page on the dashboard too. It needs your Steam account linked.",
+    ] },
     { version: "2026.11.128", date: "2026-11-26", title: "Your hours", items: [
         "Sale alerts and the For you page now forecast how many hours you would really get out of a game. It looks at the games in your library with the same genres, counts how many you actually played, and works out the price per hour of your own playing.",
         "If you tend to leave that kind of game unplayed, it says so, so a 70% off sale on something you will never open does not tempt you. It needs a synced Steam library, and you can hide it with the Time to finish and cost per hour switch.",

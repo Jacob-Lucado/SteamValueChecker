@@ -4412,3 +4412,26 @@ test("buy pacts from the dashboard: any member can start, join and cancel, and o
     assert.equal((await t.request("/api/pacts?guild=g-member")).data.pacts.length, 0);
     await t.close();
 });
+
+test("backlog pledges from the dashboard: make one from your library, back someone else's, and other servers are walled off", async () => {
+    const { createPledgeService } = await import("../src/pledge.js");
+    const posts = [];
+    const t = await signedIn({ extra: db => ({ pledge: createPledgeService({ db, discord: { post: async (c, p) => { posts.push({ c, p }); return { id: "m1" }; }, edit: async () => {} } }) }) });
+    try {
+        assert.equal((await t.request("/api/pledges?guild=g-member")).data.linked, false);
+        assert.equal((await t.request("/api/pledges", { method: "POST", body: { guild_id: "g-member", channel_id: "c2", game: "Hades", hours: 5 } })).status, 400, "no library, no pledge");
+        t.db.syncSteamGames(t.userId ?? "u1", [{ itad_id: "hades", title: "Hades", appid: 1145360, minutes: 300, lastPlayed: null }], { track: false });
+        assert.equal((await t.request("/api/pledges", { method: "POST", body: { guild_id: "g-member", channel_id: "nope", game: "Hades", hours: 5 } })).status, 400, "channel must belong to the server");
+        const ok = await t.request("/api/pledges", { method: "POST", body: { guild_id: "g-member", channel_id: "c2", game: "Hades", hours: 5 } });
+        assert.equal(ok.status, 200); assert.equal(posts.length, 1);
+        const mine = (await t.request("/api/pledges?guild=g-member")).data;
+        assert.equal(mine.linked, true); assert.equal(mine.pledges[0].own, true); assert.equal(mine.pledges[0].hours, 5);
+        const id = ok.data.id;
+        assert.equal((await t.request("/api/pledges/back", { method: "POST", body: { guild_id: "g-member", id } })).status, 400, "you cannot back your own pledge");
+        const other = t.db.createPledge({ guild_id: "g-member", channel_id: "c2", user_id: "u9", itad_id: "x", appid: 2, title: "Celeste", hours: 3, base_minutes: 0, due_at: Date.now() + 86400_000 });
+        assert.equal((await t.request("/api/pledges/doubt", { method: "POST", body: { guild_id: "g-member", id: other.id } })).data.result, "voted");
+        assert.equal((await t.request("/api/pledges?guild=g-member")).data.pledges.find(p => p.id === other.id).doubters, 1);
+        assert.equal((await t.request("/api/pledges/back", { method: "POST", body: { guild_id: "g-admin", id: other.id } })).status, 404, "a pledge from another server is not reachable");
+        assert.equal((await t.request("/api/pledges/cancel", { method: "POST", body: { guild_id: "g-member", id } })).status, 200);
+    } finally { await t.close(); }
+});

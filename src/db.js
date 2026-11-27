@@ -39,6 +39,7 @@ import { calendarSchema, calendarStore } from "./calendarstore.js";
 import { toolsSchema, toolsStore } from "./toolsstore.js";
 import { lfgSchema, lfgStore } from "./lfgstore.js";
 import { pactSchema, pactStore } from "./pactstore.js";
+import { pledgeSchema, pledgeStore } from "./pledgestore.js";
 import { hiddenGuilds, isHidden } from "./hidden.js";
 import { giftSchema, giftStore } from "./giftstore.js";
 import { socialSchema, socialStore } from "./socialstore.js";
@@ -235,7 +236,8 @@ ${aiSchema}
 ${bundleSchema}
 ${broadcastSchema}
 ${lfgSchema}
-${pactSchema}`;
+${pactSchema}
+${pledgeSchema}`;
 
 
 export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.now() } = {}) {
@@ -429,6 +431,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const community = communityStore({ run, get, all, clean, now });
     const lfg = lfgStore({ db, run, get, all, clean, now });
     const pacts = pactStore({ run, get, all, clean, now });
+    const pledges = pledgeStore({ run, get, all, clean, now });
     const grabber = grabberStore({ run, get, clean, now });
     const redeem = redeemStore({ run, get, all, clean, now });
     const calendar = calendarStore({ run, get, all, clean, now });
@@ -812,7 +815,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             for (const sql of [
                 "DELETE FROM mod_cases WHERE guild_id = ?", "DELETE FROM invite_joins WHERE guild_id = ?", "DELETE FROM member_xp WHERE guild_id = ?",
                 "DELETE FROM announcements WHERE guild_id = ?", "DELETE FROM guild_seen WHERE guild_id = ?", "DELETE FROM guild_deals WHERE guild_id = ?",
-                "DELETE FROM referral_rewards WHERE guild_id = ?", "DELETE FROM lfg_posts WHERE guild_id = ?", "DELETE FROM pact_members WHERE pact_id IN (SELECT id FROM pacts WHERE guild_id = ?)", "DELETE FROM pacts WHERE guild_id = ?", "DELETE FROM calendar_events WHERE guild_id = ?",
+                "DELETE FROM referral_rewards WHERE guild_id = ?", "DELETE FROM lfg_posts WHERE guild_id = ?", "DELETE FROM pact_members WHERE pact_id IN (SELECT id FROM pacts WHERE guild_id = ?)", "DELETE FROM pacts WHERE guild_id = ?", "DELETE FROM pledge_votes WHERE pledge_id IN (SELECT id FROM pledges WHERE guild_id = ?)", "DELETE FROM pledges WHERE guild_id = ?", "DELETE FROM calendar_events WHERE guild_id = ?",
                 "DELETE FROM tickets WHERE guild_id = ?", "DELETE FROM giveaways WHERE guild_id = ?"
             ]) { try { gone += Number(run(sql, id).changes); } catch { /* a table this build does not have */ } }
         }
@@ -923,6 +926,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             music.forgetMusicUser(discordId);
             lfg.forgetLfgUser(discordId);
             pacts.forgetPactUser(discordId);
+            pledges.forgetPledgeUser(discordId);
             indie.forgetIndieUser(discordId);
             tickets.deleteUserTickets(discordId);
             social.forgetSocialUser(discordId);
@@ -998,6 +1002,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedUsers, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...tools, ...aiData, ...santa, ...trivia, ...hiloDb, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, ...pacts, close: () => db.close()
+        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...pledges, ...tools, ...aiData, ...santa, ...trivia, ...hiloDb, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, ...pacts, close: () => db.close()
     };
 }

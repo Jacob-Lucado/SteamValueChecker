@@ -6,8 +6,9 @@ import { validTimezone, DEFAULT_TZ } from "./timeutil.js";
 import { UserError } from "./errors.js";
 import { PACT_JOIN, PACT_LEAVE, PACT_CANCEL } from "./pact.js";
 import { money } from "./render.js";
+import { PLEDGE_BACK, PLEDGE_DOUBT, PLEDGE_CANCEL, boardEmbed, pledgeEmbed } from "./pledge.js";
 
-export function createLfgHandlers({ db, lfg, pact }) {
+export function createLfgHandlers({ db, lfg, pact, pledge }) {
     const eph = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
     const canManage = i => Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
     async function failed(i, err) {
@@ -64,10 +65,32 @@ export function createLfgHandlers({ db, lfg, pact }) {
         } catch (err) { await failed(i, err); }
     }
 
+    /** /games pledge: make a pledge, or with no game show your open ones and the board. */
+    async function handlePledge(i) {
+        if (!i.guildId) return eph(i, "Use this in a server.");
+        try {
+            const game = i.options.getString("game");
+            if (!game) {
+                const mine = db.listPledgesGuild(i.guildId).filter(p => p.user_id === i.user.id);
+                return i.reply({ flags: MessageFlags.Ephemeral, embeds: [boardEmbed(db.pledgeBoard(i.guildId)), ...(mine.length ? [{ color: 0x4da3ff, title: "Your open pledges", description: mine.map(p => `**${p.title}**, ${p.hours} hours, due <t:${Math.floor(p.due_at / 1000)}:R>`).join("\n") }] : [])] });
+            }
+            const hours = i.options.getInteger("hours");
+            if (!hours) return eph(i, "Say how many hours you will play, like `hours: 10`.");
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            const made = await pledge.create({ guildId: i.guildId, channelId: i.channelId, userId: i.user.id, title: game, hours, days: i.options.getInteger("days") ?? 14 });
+            await i.editReply(`Pledged **${made.hours} hours** of **${made.title}** by <t:${Math.floor(made.due_at / 1000)}:D>. It's posted in this channel. No pressure.`);
+        } catch (err) { await failed(i, err); }
+    }
+
     async function handleButton(i) {
         const [action, idText] = i.customId.split(":");
         const id = Number(idText);
         try {
+            if (action === PLEDGE_BACK || action === PLEDGE_DOUBT) {
+                const r = await pledge.vote(id, i.user.id, action === PLEDGE_BACK ? "back" : "doubt");
+                return eph(i, r.result === "same" ? "You already called that one." : `${action === PLEDGE_BACK ? "🙌 You back" : "🤨 You doubt"} <@${r.pledge.user_id}> on **${r.pledge.title}**.`);
+            }
+            if (action === PLEDGE_CANCEL) { const p = await pledge.cancel(id, i.user.id, { canManage: canManage(i) }); return eph(i, `Cancelled the pledge for **${p.title}**.`); }
             if (action === PACT_JOIN) {
                 const r = await pact.join(id, i.user.id);
                 return eph(i, r.result === "already" ? "You are already in this pact." : `You are in the pact for **${r.pact.title}**. I'll ping you when it hits ${money(r.pact.target, r.pact.currency)}.`);
@@ -82,5 +105,5 @@ export function createLfgHandlers({ db, lfg, pact }) {
             if (action === LFG_CLOSE) { const p = await lfg.close(id, i.user.id, { canManage: canManage(i) }); return eph(i, `Closed **${p.game}**.`); }
         } catch (err) { await failed(i, err); }
     }
-    return { handleCommand, handleButton, handlePact };
+    return { handleCommand, handleButton, handlePact, handlePledge };
 }
