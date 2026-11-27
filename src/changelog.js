@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.130", date: "2026-11-27", title: "Veto draft", items: [
+        "`/server gamenight` has a new Veto draft button. The people in the voice channel take turns striking games off the list of what everyone owns, like a map veto in a shooter, until one game is left.",
+        "A menu on the card shows what is still on the board, and the next player gets a quick ping when it's their turn. If someone goes quiet, anyone in the draft can skip them after five minutes.",
+    ] },
     { version: "2026.11.129", date: "2026-11-27", title: "Backlog pledges", items: [
         "New `/games pledge`: promise to play a number of hours of a game you own by a deadline. It posts a card with a progress bar, and friends tap back or doubt. When the hours are in, or time runs out, I check your real Steam playtime and call it.",
         "Keeping your own pledge earns 10 points, and every right call from backers and doubters earns 3. Run `/games pledge` with no game to see the server board and your open pledges.",

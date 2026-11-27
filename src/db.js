@@ -768,7 +768,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const sharingMembers = guildId => all("SELECT discord_id FROM users WHERE share = 1 AND guild_id = ?", guildId).map(r => r.discord_id);
     /** Votes on old game night polls are only kept for a day after they close. */
     const prunePolls = (t = now()) => {
-        const n = run("DELETE FROM status_meta WHERE key LIKE 'poll:%' AND json_extract(value, '$.until') < ?", t - 86400_000).changes;
+        const n = run("DELETE FROM status_meta WHERE (key LIKE 'poll:%' OR key LIKE 'veto:%') AND json_extract(value, '$.until') < ?", t - 86400_000).changes;
         // a channel's pointer to its live poll goes when the poll itself is gone
         run("DELETE FROM status_meta WHERE key LIKE 'pollch:%' AND NOT EXISTS (SELECT 1 FROM status_meta p WHERE p.key = 'poll:' || status_meta.value)");
         return n;

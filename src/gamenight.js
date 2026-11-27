@@ -65,7 +65,7 @@ export function gameNightEmbed(r) {
         footer: { text: `${[...r.allOwn, ...r.almost, ...r.buy].some(g => g.coop) ? "🤝 = co-op or multiplayer  •  " : ""}${r.hidden ? `${r.hidden} not counted (not opted in)  •  ` : ""}Only members who opted in with /alerts share are included` } };
 }
 
-export const gameNightButtons = (channelId = "0") => [{ type: 1, components: [{ type: 2, style: 1, label: "Pick a game for us", custom_id: `${GN_PICK}:${channelId}` }, { type: 2, style: 2, label: "Start a vote", custom_id: `gn_poll:${channelId}` }] }];
+export const gameNightButtons = (channelId = "0") => [{ type: 1, components: [{ type: 2, style: 1, label: "Pick a game for us", custom_id: `${GN_PICK}:${channelId}` }, { type: 2, style: 2, label: "Start a vote", custom_id: `gn_poll:${channelId}` }, { type: 2, style: 2, label: "Veto draft", emoji: { name: "🗳️" }, custom_id: `gn_veto:${channelId}` }] }];
 
 /** One game chosen at random from what everyone owns, else from what almost everyone owns. */
 export function pickGame(r, rand = Math.random) {

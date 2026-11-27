@@ -1034,6 +1034,8 @@ async function onInteraction(i, again = false) {
     if (i.isButton() && i.customId.startsWith("mu:")) return musicUi ? musicUi.handleButton(i) : musicOff(i);
     if (i.isStringSelectMenu() && i.customId.startsWith("mu_pick:")) return musicUi ? musicUi.handleSelect(i) : musicOff(i);
     if (i.isButton() && i.customId.startsWith("gn_poll:")) return handlers.handleGameNightPoll(i);
+    if (i.isButton() && i.customId.startsWith("gn_veto:")) return handlers.handleVetoStart(i);
+    if ((i.isStringSelectMenu() && i.customId === "gn_vetopick") || (i.isButton() && i.customId === "gn_vetoskip")) return handlers.handleVetoMove(i);
     if (i.isButton() && i.customId.startsWith("gn_vote:")) return handlers.handlePollVote(i);
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
     if (i.isButton() && (i.customId.startsWith("lfg_") || i.customId.startsWith("pact_") || i.customId.startsWith("pledge_"))) return lfgUi.handleButton(i);

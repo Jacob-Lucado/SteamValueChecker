@@ -13,6 +13,7 @@ import { enrichFree, withOwnership } from "./freeinfo.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { MAX_ITEMS_PER_USER } from "./db.js";
+import { startVeto, veto, skip as skipVeto, vetoEmbed, vetoComponents } from "./vetodraft.js";
 import { gameNight, gameNightEmbed, gameNightButtons, pickGame, pollOptions, pollState, castVote, pollEmbed, pollButtons } from "./gamenight.js";
 import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID, STORY_ID } from "./render.js";
 import { dealFromEmbed, renderStory } from "./dealstory.js";
@@ -383,6 +384,38 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             try { db.prunePolls(); } catch { /* old votes can wait */ }
         } catch (err) { return eph(i, err instanceof UserError ? err.message : "I could not start a vote. Try again."); }
     }
+
+    /** "Veto draft": the voice group takes turns striking games until one is left. */
+    async function handleVetoStart(i) {
+        const channelId = i.customId.split(":")[1];
+        try {
+            const user = db.ensureUser(i.user.id, i.guildId);
+            const r = await gameNight({ db, itad, userIds: inVoice(i.guild, channelId), region: user.region });
+            const state = startVeto(r);
+            if (!state) return await eph(i, "There aren't enough games the group owns for a veto draft (it needs at least 3). Try the vote, or see the buy list.");
+            await i.reply({ content: state.players.map(p => `<@${p}>`).join(" "), embeds: [vetoEmbed(state)], components: vetoComponents(state), allowedMentions: { users: state.players } });
+            const sent = await i.fetchReply();
+            db.setMeta(`veto:${sent.id}`, JSON.stringify(state));
+            try { db.prunePolls(); } catch { /* old drafts can wait */ }
+        } catch (err) { return eph(i, err instanceof UserError ? err.message : "I could not start a draft. Try again."); }
+    }
+
+    async function handleVetoMove(i) {
+        try {
+            const raw = db.getMeta(`veto:${i.message.id}`);
+            if (!raw) return await eph(i, "That draft is no longer available.");
+            const state = JSON.parse(raw);
+            const r = i.isStringSelectMenu() ? veto(state, i.user.id, i.values[0]) : skipVeto(state, i.user.id);
+            if (!r.ok) return await eph(i, r.error);
+            db.setMeta(`veto:${i.message.id}`, JSON.stringify(state));
+            await i.update({ embeds: [vetoEmbed(state)], components: vetoComponents(state) });
+            // Edits never notify anyone, so the next player gets a short ping that cleans itself up.
+            const next = currentPlayerOf(state);
+            if (next) i.followUp({ content: `<@${next}> you're up.`, allowedMentions: { users: [next] } }).then(m => setTimeout(() => m.delete().catch(() => {}), 20_000)).catch(() => {});
+            return;
+        } catch (err) { return eph(i, "I could not record that. Try again."); }
+    }
+    const currentPlayerOf = s => (s.winner ? null : s.players[s.turn % s.players.length]);
 
     async function handlePollVote(i) {
         try {
@@ -1165,5 +1198,5 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
         } catch (err) { await failed(i, "message menu", err); }
     }
 
-    return { handleFixMatch, handleCoop, handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleSupporter, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleFixMatch, handleCoop, handleNowPlaying, handleGameNightPoll, handleVetoStart, handleVetoMove, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleSupporter, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }
