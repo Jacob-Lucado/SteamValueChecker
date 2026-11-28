@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.131", date: "2026-11-27", title: "player.gg playtests", items: [
+        "Playtest alerts now also read player.gg's curated playtest list. It tells you the dates of each test, who is running it, and whether sign-ups are open, so a game on your wishlist that opens a playtest there gets you an alert too.",
+        "It shows up as its own source on the Playtests page, in the playtest channel settings, and in the per-source switches, so you can leave it out or have a server post every listing. It starts quiet, so today's list is not dumped on you.",
+    ] },
     { version: "2026.11.130", date: "2026-11-27", title: "Veto draft", items: [
         "`/server gamenight` has a new Veto draft button. The people in the voice channel take turns striking games off the list of what everyone owns, like a map veto in a shooter, until one game is left.",
         "A menu on the card shows what is still on the board, and the next player gets a quick ping when it's their turn. If someone goes quiet, anyone in the draft can skip them after five minutes.",

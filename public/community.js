@@ -174,7 +174,7 @@
         // ping roles
         const pDeals = roSel(st.ping_deals, "Nobody"), pFree = roSel(st.ping_free, "Nobody"), pGw = roSel(st.ping_giveaway, "Nobody"), pLfg = roSel(st.ping_lfg, "Nobody"), pPlay = roSel(st.ping_playtest, "Nobody"), pPlayAll = h("input", { type: "checkbox", checked: Boolean(st.playtest_all) }), pPlayCh = chSel(st.playtest_channel), pSquad = roSel(st.ping_squad, "Nobody"), pSquadCh = chSel(st.squad_channel), pIndie = roSel(st.ping_indie, "Nobody"), pIndieCh = chSel(st.indie_channel), pIndieDev = roSel(st.indie_dev_role, "Nobody");
         // Pick the sources whose every listing is posted in the playtest channel, demos included (Alpha Beta Gamer already is).
-        const FULL = [["playtester", "Playtester (alphas, betas, playtests and demos)"], ["itch", "itch.io (playtests, betas, alphas and demos)"], ["gamerpower", "GamerPower (beta and playtest key listings)"], ["steamdemo", "Steam's new demos (a lot of them)"]];
+        const FULL = [["playtester", "Playtester (alphas, betas, playtests and demos)"], ["playergg", "player.gg (curated playtests with dates)"], ["itch", "itch.io (playtests, betas, alphas and demos)"], ["gamerpower", "GamerPower (beta and playtest key listings)"], ["steamdemo", "Steam's new demos (a lot of them)"]];
         const fullOn = new Set(String(st.playtest_full || "").split(",").filter(Boolean));
         const fullBoxes = FULL.map(([id, label]) => { const cb = h("input", { type: "checkbox", checked: fullOn.has(id) }); cb.dataset.src = id; return h("label", { class: "check-row" }, cb, " " + label); });
         const fullField = h("div", { class: "field" }, h("label", { text: "Post every listing from these sources in the playtest channel" }), h("div", { class: "stack" }, ...fullBoxes),

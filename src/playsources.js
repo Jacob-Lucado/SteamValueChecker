@@ -3,7 +3,7 @@
 //   { id, source, sourceName, game, type, kind, label?, url, date, summary, image, appid?, wishlistOnly? }
 // `kind` is one of signup, playtest, demo, alpha, beta (the same words the Alpha Beta Gamer reader uses).
 //
-// Sources: Alpha Beta Gamer (abgfeed.js), Playtester's feed, GamerPower's beta and playtest key listings, itch.io's playtest, beta, alpha and demo tags, and Steam's own
+// Sources: Alpha Beta Gamer (abgfeed.js), player.gg's playtest list, Playtester's feed, GamerPower's beta and playtest key listings, itch.io's playtest, beta, alpha and demo tags, and Steam's own
 // list of new demos. Steam gets dozens of demos a day, so those only count for games someone has on a wishlist (`wishlistOnly`).
 // Looked at and left out: BetaBound (gadgets and apps, not games), GamingOnLinux (about one relevant article in thirty), Reddit and
 // IndieDB (both refuse bots).
@@ -135,9 +135,43 @@ export function parsePlaytester(xml) {
     return out.sort((a, b) => b.date - a.date);
 }
 
+// ---------- player.gg: https://player.gg/playtests?upcoming=1 ----------
+// A hand-curated list of playtests with dates, the studio and whether sign-ups are open. The page is built with Astro and hands its list to a
+// script as the props of an "island", so there is no feed: we read those props. The format wraps every value as [0, value] (or [1, [..]] for lists).
+export const PLAYERGG_URL = "https://player.gg/playtests?upcoming=1";
+const unwrapAstro = v => (Array.isArray(v) ? (v[0] === 0 ? unwrapAstro(v[1]) : v[0] === 1 ? v[1].map(unwrapAstro) : v) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, unwrapAstro(x)])) : v);
+const attrText = s => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+/** The island that holds the listing, as { items, total, perPage }. Throws when the page no longer has one, so a redesign shows up as a failing source, not as "no playtests". */
+export function readPlayerGgPage(html) {
+    for (const m of String(html ?? "").matchAll(/<astro-island[^>]*?\sprops="([^"]*)"/g)) {
+        if (!m[1].includes("initialItems")) continue;
+        let props;
+        try { props = unwrapAstro(JSON.parse(attrText(m[1]))); } catch { continue; }
+        if (Array.isArray(props.initialItems)) return { items: props.initialItems, total: Number(props.initialTotal) || props.initialItems.length, perPage: Number(props.perPage) || props.initialItems.length };
+    }
+    throw new Error("player.gg: no playtest list on the page");
+}
+const shortDate = ms => new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+export function parsePlayerGg(items, { now = Date.now() } = {}) {
+    const out = [];
+    for (const g of items ?? []) {
+        const ev = g?.nextEvent, start = Date.parse(ev?.start), end = Date.parse(ev?.end);
+        const url = safeUrl(g?.href ? `https://player.gg${g.href}` : "");
+        if (!g?.title || !url || g.confidential || !Number.isFinite(start)) continue;
+        if (Number.isFinite(end) && end < now) continue;
+        const signup = g.status === "waitlist";
+        const when = `${shortDate(start)}${Number.isFinite(end) ? ` to ${shortDate(end)}` : ""}`;
+        const summary = [`${ev.title ? ev.title + ", " : ""}${when}${g.companies ? `, by ${g.companies}` : ""}.`, String(g.shortDescription ?? "").replace(/\s+/g, " ").trim()].filter(Boolean).join(" ").slice(0, 300);
+        const image = safeUrl(g.imageUrl ?? ""), steamApp = /\/steam\/apps\/(\d+)\//.exec(g.imageUrl ?? "")?.[1];
+        out.push({ id: `pgg:${g.slug}:${ev.event_id ?? ev.start}`, source: "playergg", sourceName: "player.gg", game: String(g.title).slice(0, 100), type: "", kind: "playtest", label: signup ? "Playtest sign-up" : "Playtest", url,
+            date: Math.min(start, now), summary, image, tags: (g.genres ?? []).filter(x => typeof x === "string").slice(0, 12), ...(steamApp ? { appid: Number(steamApp) } : {}) });
+    }
+    return out.sort((a, b) => b.date - a.date);
+}
+
 // ---------- the merge, and the filter against duplicates ----------
 /** Lower number wins when two sources list the same thing. Alpha Beta Gamer writes its own excerpt for each post, so it comes first. */
-const PRIORITY = { abg: 0, gamerpower: 1, playtester: 2, itch: 3, steamdemo: 4 };
+const PRIORITY = { abg: 0, playergg: 1, gamerpower: 2, playtester: 3, itch: 4, steamdemo: 5 };
 const SAME_WINDOW = 7 * DAY;
 
 /**
@@ -217,6 +251,15 @@ export function createPlaytestSources({ fetchImpl = globalThis.fetch, now = () =
             const main = parsePlaytester(await get(PLAYTESTER_URL, "text")); // this one has to work
             const extra = await Promise.allSettled(PLAYTESTER_FEEDS.map(async u => parsePlaytester(await get(u, "text"))));
             return mergePlaytester([main, ...extra.map(r => (r.status === "fulfilled" ? r.value : [])), await playtesterGenres()]);
+        } }),
+        cached({ name: "player.gg", ttlMs: Math.max(ttlMs, 60 * 60_000), now, load: async () => {
+            const first = readPlayerGgPage(await get(PLAYERGG_URL, "text"));
+            const items = [...first.items];
+            // A long list comes in pages; the list is short today, but follow it a few pages in case it grows.
+            for (let page = 2; items.length < first.total && page <= 5; page++) {
+                try { items.push(...readPlayerGgPage(await get(`${PLAYERGG_URL}&page=${page}`, "text")).items); } catch { break; }
+            }
+            return parsePlayerGg(items, { now: now() });
         } }),
         cached({ name: "Steam demos", ttlMs, now, load: async () => parseSteamDemos(await get(STEAM_DEMOS_URL, "json")) })
     ];

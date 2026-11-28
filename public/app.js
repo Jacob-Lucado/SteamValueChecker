@@ -889,7 +889,7 @@ window.SVC_SITE = envIn => {
   // Playtests, betas, demos and free weekends. The list asks the server again every few minutes by itself, flags what is new
   // since the page opened, and pauses while the tab is hidden.
   const PLAYTEST_POLL_MS = 5 * 60_000;
-  const PLAYTEST_SOURCES = [["abg", "Alpha Beta Gamer"], ["gamerpower", "GamerPower"], ["itch", "itch.io"], ["playtester", "Playtester"], ["steamdemo", "Steam demos"]];
+  const PLAYTEST_SOURCES = [["abg", "Alpha Beta Gamer"], ["gamerpower", "GamerPower"], ["playergg", "player.gg"], ["itch", "itch.io"], ["playtester", "Playtester"], ["steamdemo", "Steam demos"]];
   async function playtestsView() { return (await lazy("PlaytestsUI")).view({ PLAYTEST_POLL_MS, api, app, currentView, ext, h, pageHead, state, toast }); }
 
   /** The server's game of the month: the pick, who is playing or finished, and (for managers) the controls. */

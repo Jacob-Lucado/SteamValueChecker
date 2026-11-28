@@ -224,3 +224,37 @@ test("a member and a server can each leave itch.io (or any site) out of their al
     assert.equal(dms.length, 1); assert.match(dms[0], /Second GP/, "the member still gets GamerPower but not itch.io");
     assert.equal(posts.length, 1); assert.match(posts[0], /Second Itch/, "the server still gets itch.io but not GamerPower");
 });
+
+test("player.gg: the playtest list is read from the page, sign-ups and running tests are told apart, finished ones are dropped", async () => {
+    const { readPlayerGgPage, parsePlayerGg } = await import("../src/playsources.js");
+    const page = readPlayerGgPage(F("playergg.html"));
+    assert.equal(page.items.length, 13); assert.equal(page.total, 13);
+    const now = Date.parse("2026-11-27T22:00:00Z");
+    const list = parsePlayerGg(page.items, { now });
+    assert.equal(list.length, 13);
+    const harbor = list.find(x => x.game === "Harbor"), zlin = list.find(x => x.game.startsWith("Zlin"));
+    assert.equal(harbor.label, "Playtest sign-up"); assert.equal(zlin.label, "Playtest");
+    assert.equal(harbor.url, "https://player.gg/explore/games/332955-harbor");
+    assert.equal(harbor.appid, 2714930, "the Steam app id is read from the capsule image, so wishlists match");
+    assert.match(harbor.summary, /^Alpha Tech Test 3, Dec 3 to Dec 6, by Castilva Games, Wandering Wizard\./);
+    assert.ok(harbor.date <= now, "a test that has not started yet is dated now, never in the future");
+    assert.equal(zlin.date, Date.parse("2026-11-17T00:00:00Z"));
+    assert.ok(harbor.tags.includes("Indie"));
+    assert.equal(parsePlayerGg(page.items, { now: Date.parse("2026-12-05T00:00:00Z") }).some(x => x.game === "Project Shiva"), false, "Project Shiva ended Nov 29");
+    assert.throws(() => readPlayerGgPage("<html>redesigned</html>"), /no playtest list/);
+    // a hidden (confidential) listing is never posted
+    assert.equal(parsePlayerGg([{ ...page.items[0], confidential: true }], { now }).length, 0);
+});
+
+test("player.gg joins the merged list, outranks Playtester for the same game, and a redesign counts as the source failing", async () => {
+    const { dedupeItems } = await import("../src/playsources.js");
+    const t = Date.now();
+    const a = { id: "pgg:1", source: "playergg", game: "Harbor", kind: "playtest", date: t, url: "https://player.gg/x" }, b = { id: "pt:1", source: "playtester", game: "Harbor", kind: "playtest", date: t, url: "https://playtester.io/x" };
+    assert.deepEqual(dedupeItems([b, a]).map(x => x.source), ["playergg"]);
+    const fetchImpl = async url => (new URL(url).hostname === "player.gg" ? { ok: true, text: async () => F("playergg.html") } : { ok: false, status: 503 });
+    const src = createPlaytestSources({ fetchImpl, now: () => Date.parse("2026-11-27T22:00:00Z") });
+    const all = await src.latest();
+    assert.ok(all.length >= 12 && all.every(x => x.source === "playergg"));
+    const broken = createPlaytestSources({ fetchImpl: async url => (new URL(url).hostname === "player.gg" ? { ok: true, text: async () => "<html>new design</html>" } : { ok: false, status: 503 }), now: () => t });
+    await assert.rejects(broken.latest());
+});
