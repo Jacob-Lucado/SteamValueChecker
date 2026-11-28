@@ -14,7 +14,7 @@ ARG VOLT_REPO=https://github.com/Jacob-Lucado/Volt.git
 ARG VOLT_REF=lucadoos
 ARG VOLT_SHA=unknown
 # The renderer commit that matches this client.
-ARG VOLT_RENDERER_REF=v1.0.9
+ARG VOLT_RENDERER_REF=v1.0.13
 ARG ADMINER_VERSION=6.3.0
 ARG HOTEL_FILES_URL=https://github.com/plus-emulator/plusemu-installer/releases/download/hotel-files
 
