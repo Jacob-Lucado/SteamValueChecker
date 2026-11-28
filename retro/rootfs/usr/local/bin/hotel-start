@@ -276,7 +276,7 @@ set_env DB_DATABASE plus
 set_env DB_USERNAME hotel
 set_env DB_PASSWORD "$DB_PASSWORD"
 set_env EMULATOR_DRIVER plus
-set_env CMS_THEME lucadoos
+set_env CMS_THEME lucado
 set_env CLIENT_NITRO_ENABLED true
 set_env AIR_CLIENT_ENABLED "$([ "$AIR_READY" = 1 ] && echo true || echo false)"
 set_env NITRO_CLIENT_PATH "$SITE_URL/client"
