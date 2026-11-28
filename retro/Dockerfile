@@ -120,6 +120,7 @@ RUN echo "CMS $CMS_SHA" && git clone --depth 1 --branch "$CMS_REF" "$CMS_REPO" "
     && npm run build:lucadoos \
     && npx vite build --config resources/themes/mercury/vite.config.js \
     && npx vite build --config resources/themes/revpro/vite.config.js \
+    && npx vite build --config resources/themes/lucado/vite.config.js \
     && rm -rf node_modules \
     && rm -rf storage && ln -s /data/storage storage \
     && ln -s /data/cms.env .env
