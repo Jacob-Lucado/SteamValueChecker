@@ -258,3 +258,14 @@ test("player.gg joins the merged list, outranks Playtester for the same game, an
     const broken = createPlaytestSources({ fetchImpl: async url => (new URL(url).hostname === "player.gg" ? { ok: true, text: async () => "<html>new design</html>" } : { ok: false, status: 503 }), now: () => t });
     await assert.rejects(broken.latest());
 });
+
+test("a server that ticks player.gg posts its listings in the bot channel, quietly at first", async () => {
+    const w = world();
+    const pg = (name, daysAgo) => ({ ...item("playergg", name, "playtest", daysAgo), label: "Playtest sign-up", sourceName: "player.gg" });
+    w.set([item("abg", "Anchor", "signup", 5), pg("Old Listing", 3)]); await w.run();   // first look: quiet
+    w.db.setCommunity("G", { playtest_full: "playergg" });
+    w.set([item("abg", "Anchor", "signup", 5), pg("Old Listing", 3)]); await w.run();
+    assert.equal(w.chan.length, 0, "switching it on starts quiet");
+    w.set([item("abg", "Anchor", "signup", 5), pg("Old Listing", 3), pg("Fresh Listing", 0.05)]); await w.run();
+    assert.equal(w.chan.length, 1); assert.match(w.chan[0].title, /Playtest sign-up: Fresh Listing/);
+});

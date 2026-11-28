@@ -16,7 +16,7 @@ import { createEmojiGg, PACK_KEY_RE } from "../emojisource.js";
 
 export class CommunityError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
-export const FULL_SOURCES = ["playtester", "itch", "gamerpower", "steamdemo"];
+export const FULL_SOURCES = ["playergg", "playtester", "itch", "gamerpower", "steamdemo"];
 
 export function createCommunityDash({ db, rest, community, membersIntent = () => true, ai = { available: false, phrase: false }, rt = null, botId, publicUrl = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
     const memeSource = createMemes({ fetchImpl });
